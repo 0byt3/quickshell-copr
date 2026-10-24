@@ -64,8 +64,8 @@ try:
     if Path("artifacts").exists() and not os.access("artifacts", os.R_OK | os.W_OK | os.X_OK):
         raise PermissionError("The service account needs access to artifacts")
     stage = "container runtime"
-    if not (shutil.which("docker") or shutil.which("podman")):
-        raise ValueError("Install Docker or Podman from distribution repositories")
+    if not shutil.which("podman"):
+        raise ValueError("Install Podman from distribution repositories")
 except Exception as error:
     print(f"Preflight failed at {stage} ({type(error).__name__}); see README.md.", file=sys.stderr)
     sys.exit(1)

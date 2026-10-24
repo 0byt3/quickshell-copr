@@ -81,9 +81,9 @@ def run(command, log, capture=False):
 
 
 def container_gate(project, workspace, output, config):
-    runtime = shutil.which("docker") or shutil.which("podman")
+    runtime = shutil.which("podman")
     if not runtime:
-        raise GateError("infrastructure-failed", "Docker or Podman is required")
+        raise GateError("infrastructure-failed", "Podman is required; install it from distribution repositories")
     log = output / "container.log"
     token = uuid.uuid4().hex
     preparation = f"qscopr-prepare-{token}"

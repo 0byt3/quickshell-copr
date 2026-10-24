@@ -154,7 +154,7 @@ class GateTests(unittest.TestCase):
         download.assert_called_once()
 
     @patch("qscopr.gate.subprocess.run")
-    @patch("qscopr.gate.shutil.which", return_value="/usr/bin/docker")
+    @patch("qscopr.gate.shutil.which", side_effect=lambda program: f"/usr/bin/{program}")
     def test_offline_builder_has_no_capabilities_or_host_mounts(self, which, cleanup):
         commands = []
 
@@ -181,9 +181,33 @@ class GateTests(unittest.TestCase):
         self.assertIn("--security-opt=no-new-privileges", builder)
         self.assertFalse(any("-v" in command or "--mount" in command for command in commands))
         self.assertEqual(cleanup.call_count, 3)
+        which.assert_called_once_with("podman")
+        for command in commands:
+            self.assertEqual(command[0], "/usr/bin/podman")
+        for call in cleanup.call_args_list:
+            self.assertEqual(call.args[0][0], "/usr/bin/podman")
+
+    def test_missing_podman_does_not_fall_back_to_docker(self):
+        with patch(
+            "qscopr.gate.shutil.which",
+            side_effect=lambda program: "/usr/bin/docker" if program == "docker" else None,
+        ) as which, patch("qscopr.gate.run") as run, patch("qscopr.gate.subprocess.run") as cleanup:
+            with self.assertRaisesRegex(GateError, "Podman is required") as error:
+                container_gate(
+                    self.project,
+                    self.project,
+                    self.output,
+                    {
+                        "image": "registry.fedoraproject.org/fedora:44",
+                    },
+                )
+        self.assertEqual(error.exception.status, "infrastructure-failed")
+        which.assert_called_once_with("podman")
+        run.assert_not_called()
+        cleanup.assert_not_called()
 
     @patch("qscopr.gate.subprocess.run")
-    @patch("qscopr.gate.shutil.which", return_value="/usr/bin/docker")
+    @patch("qscopr.gate.shutil.which", return_value="/usr/bin/podman")
     def test_blocked_dependencies_never_launch_builder(self, which, cleanup):
         commands = []
 
@@ -243,7 +267,7 @@ class GateTests(unittest.TestCase):
         self.assertEqual(manifest["prerequisites"][0]["srpm"], "cpptrace.src.rpm")
 
     @patch("qscopr.gate.subprocess.run")
-    @patch("qscopr.gate.shutil.which", return_value="/usr/bin/docker")
+    @patch("qscopr.gate.shutil.which", return_value="/usr/bin/podman")
     def test_cpptrace_build_install_and_quickshell_are_separate_stages(self, which, cleanup):
         (self.project / "cpptrace-release.json").write_text("{}")
         commands = []

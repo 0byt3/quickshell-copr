@@ -29,7 +29,7 @@ For a build/check without publication, use the local commands in the next sectio
 Requirements:
 
 - Python 3.12 or newer.
-- Docker with daemon access, or Podman if Docker is not installed.
+- Native Podman, with working container access for the invoking account.
 - Internet access for upstream source, the Fedora image, and official repositories.
 - An x86_64 host, or working linux/amd64 container emulation.
 
@@ -103,7 +103,7 @@ promoting.
    and install only cpptrace's runtime/devel RPMs with RPM dependency checks intact,
    then verify installed providers for every Quickshell BuildRequires.
 9. Start a fresh **unprivileged, capability-free, network-disabled** build container,
-   without host bind mounts, host Docker socket, or publishing credentials.
+   without host bind mounts, container-runtime sockets, or publishing credentials.
    Compile/run a CMake consumer against the installed cpptrace package, without
    access to cpptrace's build tree.
    Run `rpmbuild -ba`: CMake configure, Ninja compile, staged install, `%check`
@@ -206,8 +206,8 @@ repositories:
 - Python 3.12 or newer.
 - The Python COPR client (`python3-copr` on Fedora), available to the same Python
   interpreter used by the service. No pip installation is needed on Fedora.
-- Docker with daemon access, or Podman if Docker is absent. The checker prefers
-  Docker when both are installed, so it must actually work for the service account.
+- Native Podman, available to the service account. Docker is neither required
+  nor selected, even when both runtimes are installed.
 - An SMTP provider or trusted relay that supports STARTTLS or implicit TLS.
   Alerts use Python's standard library directly; no sendmail, Postfix, local mail
   service, or extra Python email package is required.
@@ -218,8 +218,9 @@ repositories:
 
 For rootless Podman, configure the service account's runtime directory/user
 manager as required by the server distribution. The supplied system units do not
-provision that runtime. Docker daemon access is effectively root-level access;
-grant it only to a trusted service account.
+provision that runtime. The walkthrough below configures lingering and the
+system-service environment for rootless Podman; no container daemon or
+Docker-compatible wrapper is needed.
 
 Configure the server:
 
@@ -293,8 +294,8 @@ python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml
 
 Run the following commands **on the server**, using an administrator account with
 sudo. The package/account example is for a conventional **Fedora Server x86_64**
-installation using Docker/Moby; adapt package names and account tools for another
-distribution. The host need not be Fedora 44: the build container always uses the
+installation using rootless Podman; adapt package names and account tools for
+another distribution. The host need not be Fedora 44: the build container uses the
 configured Fedora 44 image. The commit must have been pushed before cloning or
 pulling; development-machine commits are not automatically deployed.
 
@@ -306,25 +307,29 @@ instead of recreating accounts, cloning over the checkout, or overwriting settin
 Install packages from Fedora's repositories, not pip or downloaded installers:
 
 ```bash
-sudo dnf install git python3 python3-copr moby-engine docker-cli \
+sudo dnf install git python3 python3-copr podman \
     systemd util-linux shadow-utils ca-certificates openssl
-sudo useradd --system --user-group --create-home \
+sudo useradd --user-group --create-home \
     --home-dir /var/lib/quickshell-copr \
     --shell /usr/sbin/nologin quickshell-copr
-sudo systemctl enable --now docker.service
-sudo usermod --append --groups docker quickshell-copr
+sudo loginctl enable-linger quickshell-copr
+SERVICE_UID=$(id -u quickshell-copr)
+sudo systemctl start "user@${SERVICE_UID}.service"
+getsubids quickshell-copr
+getsubids -g quickshell-copr
 ```
 
-Docker group membership grants effectively root-level host access; this must be
-a trusted service account. New service processes pick up its group membership
-without an interactive login. See Fedora's
-[Docker package documentation](https://docs.fedoraproject.org/en-US/quick-docs/installing-docker/)
-for distribution-specific details. Do not mix Fedora's Moby packages with a
-different Docker package source or the `podman-docker` compatibility wrapper.
-If choosing rootless Podman instead, skip the Docker-specific commands, configure
-the account's runtime/user manager and system-service environment for that
-distribution, and verify container execution in that environment before enabling
-the timer. The installer does not provision a rootless runtime.
+The example deliberately creates a regular non-login account, rather than using
+`useradd --system`, so Fedora allocates subordinate UID/GID ranges for rootless
+containers. Both `getsubids` commands must report non-overlapping ranges with at
+least 65,536 IDs for this account. For an existing account, verify its ranges;
+do not assign arbitrary ranges that might overlap another account.
+
+On `COPR-updates`, the existing account is `copr`, its home is `/home/copr`, and
+its UID is `1001`. Skip account creation there and substitute that account, group,
+and home throughout these examples, including `--user copr` when installing.
+Use the account's actual UID, not the container's build UID `1000`.
+Lingering keeps its user manager and `/run/user/<UID>` available without SSH.
 
 Clone the repository into a new service-owned directory:
 
@@ -349,18 +354,58 @@ Verify Python, the COPR client, and actual container access as the service accou
 sudo -u quickshell-copr /usr/bin/python3 -c \
     'import sys, copr.v3; assert sys.version_info >= (3, 12), "Python 3.12+ required"'
 sudo -u quickshell-copr env -i \
-    HOME=/var/lib/quickshell-copr PATH=/usr/bin:/bin /usr/bin/docker info
+    HOME=/var/lib/quickshell-copr PATH=/usr/bin:/bin \
+    XDG_RUNTIME_DIR="/run/user/${SERVICE_UID}" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${SERVICE_UID}/bus" \
+    /usr/bin/podman info
 sudo -u quickshell-copr env -i \
-    HOME=/var/lib/quickshell-copr PATH=/usr/bin:/bin /usr/bin/docker run \
+    HOME=/var/lib/quickshell-copr PATH=/usr/bin:/bin \
+    XDG_RUNTIME_DIR="/run/user/${SERVICE_UID}" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${SERVICE_UID}/bus" \
+    /usr/bin/podman run \
     --rm --platform=linux/amd64 --network=none --cap-drop=ALL \
     --security-opt=no-new-privileges --user=1000:1000 \
     registry.fedoraproject.org/fedora:44 /usr/bin/uname -m
 ```
 
 The last command downloads the official image if necessary and should print
-`x86_64`; it does not build or publish packages. Fix daemon, permissions, network,
+`x86_64`; it does not build or publish packages. Fix runtime, permissions, network,
 or architecture/emulation failures before proceeding. These checks deliberately
-do not rely on an interactive shell's Docker context or runtime variables.
+provide the service account's own runtime variables instead of relying on the
+administrator's interactive environment.
+
+Prepare drop-ins for both system services so rootless Podman has the same
+persistent runtime after boot. This example uses the newly created account's
+home; substitute `/home/copr` when deploying as the existing `copr` user.
+Run it in the same shell where `SERVICE_UID` was set, or recompute that variable
+for the selected account first:
+
+```bash
+sudo install -d -o root -g root -m 0755 \
+    /etc/systemd/system/quickshell-copr.service.d \
+    /etc/systemd/system/quickshell-copr-alert.service.d
+sudo tee /etc/systemd/system/quickshell-copr.service.d/rootless-podman.conf >/dev/null <<EOF
+[Unit]
+Requires=user@${SERVICE_UID}.service
+After=user@${SERVICE_UID}.service
+
+[Service]
+Environment=HOME=/var/lib/quickshell-copr
+Environment=XDG_RUNTIME_DIR=/run/user/${SERVICE_UID}
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${SERVICE_UID}/bus
+Delegate=yes
+EOF
+sudo chmod 0644 /etc/systemd/system/quickshell-copr.service.d/rootless-podman.conf
+sudo install -o root -g root -m 0644 \
+    /etc/systemd/system/quickshell-copr.service.d/rootless-podman.conf \
+    /etc/systemd/system/quickshell-copr-alert.service.d/rootless-podman.conf
+```
+
+These settings do not enable scheduling. The installer reloads systemd after
+installing the base units and preserves these drop-ins. If changing an existing
+drop-in, stop scheduling and wait for active services first, back up the old
+drop-in, then reload systemd. Each account has separate Podman storage; do not
+transfer another account's container storage by changing its ownership.
 
 #### 2. Configure a fresh installation
 
@@ -514,7 +559,7 @@ sudo ./install \
 Before installing, prerequisite checks run as the selected non-root account.
 They validate configuration, credential-file metadata/readability without reading
 the secrets, SMTP CA trust, checkout write access, and container-tool availability.
-They do not contact COPR/SMTP, test container daemon access, build, or publish.
+They do not contact COPR/SMTP, test container execution, build, or publish.
 Test email delivery and container access separately as described above.
 
 Installation reloads systemd and enables/starts **only the timer**. Because the
@@ -607,12 +652,14 @@ and backups unless deliberately retiring them.
 ### cron alternative
 
 Use the dedicated account's crontab **instead of** the timer. Configure cron's
-`PATH` so Docker/Podman can be found. This example uses the server's cron timezone:
+`PATH` so Podman can be found. For rootless operation, also supply the account's
+own `HOME`, `XDG_RUNTIME_DIR`, and user bus address as above, with lingering
+enabled. This example uses the server's cron timezone:
 
 ```cron
 PATH=/usr/local/bin:/usr/bin:/bin
 MAILTO=""
-23 6 * * * cd /srv/quickshell-copr && /usr/bin/python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml >> /srv/quickshell-copr/artifacts/cron.log 2>&1
+23 6 * * * cd /srv/quickshell-copr && XDG_RUNTIME_DIR=/run/user/$(id -u) DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus /usr/bin/python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml >> /srv/quickshell-copr/artifacts/cron.log 2>&1
 ```
 
 The Python command owns the full flow and alerts on ordinary failures; no chain of

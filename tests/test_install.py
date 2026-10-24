@@ -394,6 +394,28 @@ class InstallerPreflightTests(unittest.TestCase):
                 self.probe()
         self.assertIn("container runtime", self.errors.getvalue())
 
+    def test_podman_is_checked_even_when_docker_is_installed(self):
+        with patch.object(
+            installer.shutil,
+            "which",
+            side_effect=lambda program: f"/usr/bin/{program}",
+        ) as which:
+            self.probe()
+        which.assert_called_once_with("podman")
+        self.assertIn("prerequisite checks passed", self.output.getvalue())
+
+    def test_docker_alone_does_not_satisfy_the_runtime_prerequisite(self):
+        with patch.object(
+            installer.shutil,
+            "which",
+            side_effect=lambda program: "/usr/bin/docker" if program == "docker" else None,
+        ) as which:
+            with self.assertRaises(SystemExit) as error:
+                self.probe()
+        self.assertEqual(error.exception.code, 1)
+        which.assert_called_once_with("podman")
+        self.assertIn("container runtime", self.errors.getvalue())
+
 
 @unittest.skipUnless(shutil.which("systemd-analyze"), "Unit verification requires systemd-analyze")
 class InstallerCLITests(unittest.TestCase):
