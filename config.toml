@@ -1,0 +1,16 @@
+fedora = 44
+architecture = "x86_64"
+image = "registry.fedoraproject.org/fedora:44"
+upstream = "quickshell-mirror/quickshell"
+jobs = 2
+
+[cpptrace]
+repository = "jeremy-rifkin/cpptrace"
+tag = "v1.0.4"
+commit = "3db8da80111171c219ab5839905771386bee06b3"
+sha256 = "77d689fd7956ff80351a079d83e86a03865dbbe2433b4559cc6cea50bed77390"
+rpm_release = 1
+
+[copr]
+project = ""
+distributor = "Fedora COPR (quickshell-copr)"

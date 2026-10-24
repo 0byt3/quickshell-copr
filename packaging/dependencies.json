@@ -1,0 +1,1050 @@
+{
+    "cpptrace": {
+        "cmake_flags": [
+            "-DCPPTRACE_BUILD_SHARED=ON",
+            "-DCPPTRACE_UNWIND_WITH_LIBUNWIND=ON",
+            "-DCPPTRACE_GET_SYMBOLS_WITH_LIBDWARF=ON",
+            "-DCPPTRACE_USE_EXTERNAL_LIBDWARF=ON",
+            "-DCPPTRACE_FIND_LIBDWARF_WITH_PKGCONFIG=ON",
+            "-DCPPTRACE_USE_EXTERNAL_ZSTD=ON",
+            "-DCPPTRACE_BUILD_TESTING=ON",
+            "-DCPPTRACE_USE_EXTERNAL_GTEST=ON",
+            "-DCPPTRACE_BUILD_TOOLS=OFF",
+            "-DCPPTRACE_BUILD_BENCHMARKING=OFF",
+            "-DCPPTRACE_DISABLE_CXX_20_MODULES=ON",
+            "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
+            "-DFETCHCONTENT_UPDATES_DISCONNECTED=ON"
+        ],
+        "declarations": [
+            {
+                "arguments": [
+                    "CCACHE_PROGRAM",
+                    "ccache"
+                ],
+                "command": "find_program",
+                "source": "CMakeLists.txt:27"
+            },
+            {
+                "arguments": [
+                    "CPPTRACE_ADDR2LINE_PATH_FINAL",
+                    "atos",
+                    "PATHS",
+                    "ENV",
+                    "PATH",
+                    "REQUIRED"
+                ],
+                "command": "find_program",
+                "source": "CMakeLists.txt:323"
+            },
+            {
+                "arguments": [
+                    "CPPTRACE_ADDR2LINE_PATH_FINAL",
+                    "addr2line",
+                    "PATHS",
+                    "ENV",
+                    "PATH",
+                    "REQUIRED"
+                ],
+                "command": "find_program",
+                "source": "CMakeLists.txt:325"
+            },
+            {
+                "arguments": [
+                    "libdwarf",
+                    "REQUIRED"
+                ],
+                "command": "find_package",
+                "source": "CMakeLists.txt:343"
+            },
+            {
+                "arguments": [
+                    "PkgConfig"
+                ],
+                "command": "find_package",
+                "source": "CMakeLists.txt:345"
+            },
+            {
+                "arguments": [
+                    "LIBDWARF",
+                    "REQUIRED",
+                    "libdwarf"
+                ],
+                "command": "pkg_check_modules",
+                "source": "CMakeLists.txt:346"
+            },
+            {
+                "arguments": [
+                    "zstd"
+                ],
+                "command": "find_package",
+                "source": "CMakeLists.txt:352"
+            },
+            {
+                "arguments": [
+                    "PkgConfig"
+                ],
+                "command": "find_package",
+                "source": "CMakeLists.txt:468"
+            },
+            {
+                "arguments": [
+                    "LIBUNWIND",
+                    "QUIET",
+                    "libunwind"
+                ],
+                "command": "pkg_check_modules",
+                "source": "CMakeLists.txt:470"
+            },
+            {
+                "arguments": [
+                    "LIBUNWIND_INCLUDE_DIRS",
+                    "NAMES",
+                    "libunwind.h"
+                ],
+                "command": "find_path",
+                "source": "CMakeLists.txt:481"
+            },
+            {
+                "arguments": [
+                    "LIBUNWIND",
+                    "NAMES",
+                    "unwind",
+                    "libunwind",
+                    "libunwind8",
+                    "libunwind.so.8",
+                    "REQUIRED",
+                    "PATHS",
+                    "/usr/lib/x86_64-linux-gnu/"
+                ],
+                "command": "find_library",
+                "source": "CMakeLists.txt:482"
+            },
+            {
+                "arguments": [
+                    "zstd_INCLUDE_DIR",
+                    "NAMES",
+                    "zstd.h"
+                ],
+                "command": "find_path",
+                "source": "cmake/Findzstd.cmake:11"
+            },
+            {
+                "arguments": [
+                    "zstd_LIBRARY_DEBUG",
+                    "NAMES",
+                    "zstdd",
+                    "zstd_staticd"
+                ],
+                "command": "find_library",
+                "source": "cmake/Findzstd.cmake:13"
+            },
+            {
+                "arguments": [
+                    "zstd_LIBRARY_RELEASE",
+                    "NAMES",
+                    "zstd",
+                    "zstd_static"
+                ],
+                "command": "find_library",
+                "source": "cmake/Findzstd.cmake:14"
+            },
+            {
+                "arguments": [
+                    "GTest"
+                ],
+                "command": "find_package",
+                "source": "test/CMakeLists.txt:127"
+            },
+            {
+                "arguments": [
+                    "cpptrace",
+                    "REQUIRED"
+                ],
+                "command": "find_package",
+                "source": "test/findpackage-integration/CMakeLists.txt:7"
+            },
+            {
+                "arguments": [
+                    "cpptrace",
+                    "REQUIRED"
+                ],
+                "command": "find_package",
+                "source": "test/speedtest/CMakeLists.txt:40"
+            }
+        ],
+        "policy": "Reviewed immutable v1.0.4 profile; external Fedora libraries and tests; no fetching",
+        "requirements": [
+            {
+                "capability": "cmake >= 3.15",
+                "reason": "CMake minimum version",
+                "source": "CMakeLists.txt"
+            },
+            {
+                "capability": "gcc-c++",
+                "reason": "C/C++ compiler and C++ ABI",
+                "source": "policy"
+            },
+            {
+                "capability": "ninja-build",
+                "reason": "RPM build generator",
+                "source": "policy"
+            },
+            {
+                "capability": "cmake-rpm-macros",
+                "reason": "RPM build and test macros",
+                "source": "policy"
+            },
+            {
+                "capability": "pkgconf-pkg-config",
+                "reason": "External dependency discovery",
+                "source": "CMakeLists.txt"
+            },
+            {
+                "capability": "pkgconfig(libunwind)",
+                "reason": "Required signal-safe unwinding backend",
+                "source": "CMakeLists.txt"
+            },
+            {
+                "capability": "pkgconfig(libdwarf) >= 2.1",
+                "reason": "External DWARF backend; conservative upstream 2.1 baseline",
+                "source": "CMakeLists.txt"
+            },
+            {
+                "capability": "pkgconfig(libzstd)",
+                "reason": "Installed CMake consumer dependency",
+                "source": "cmake/in/cpptrace-config-cmake.in"
+            },
+            {
+                "capability": "pkgconfig(zlib)",
+                "reason": "System compression support",
+                "source": "policy"
+            },
+            {
+                "capability": "cmake(GTest)",
+                "reason": "Upstream tests using system GTest",
+                "source": "test/CMakeLists.txt"
+            },
+            {
+                "capability": "gmock-devel",
+                "reason": "Upstream tests using system GMock",
+                "source": "test/CMakeLists.txt"
+            }
+        ]
+    },
+    "declarations": [
+        {
+            "arguments": [
+                "Qt6",
+                "REQUIRED",
+                "COMPONENTS",
+                "${QT_FPDEPS}"
+            ],
+            "command": "find_package",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "arguments": [
+                "Qt6",
+                "REQUIRED",
+                "COMPONENTS",
+                "${QT_PRIVDEPS}"
+            ],
+            "command": "find_package",
+            "source": "CMakeLists.txt:147"
+        },
+        {
+            "arguments": [
+                "PkgConfig",
+                "REQUIRED"
+            ],
+            "command": "find_package",
+            "source": "CMakeLists.txt:157"
+        },
+        {
+            "arguments": [
+                "JEMALLOC",
+                "REQUIRED",
+                "jemalloc"
+            ],
+            "command": "pkg_check_modules",
+            "source": "CMakeLists.txt:159"
+        },
+        {
+            "arguments": [
+                "libdrm",
+                "REQUIRED",
+                "IMPORTED_TARGET",
+                "libdrm"
+            ],
+            "command": "pkg_check_modules",
+            "source": "src/core/CMakeLists.txt:1"
+        },
+        {
+            "arguments": [
+                "cpptrace",
+                "REQUIRED"
+            ],
+            "command": "find_package",
+            "source": "src/crash/CMakeLists.txt:23"
+        },
+        {
+            "arguments": [
+                "CLI11",
+                "CONFIG",
+                "REQUIRED"
+            ],
+            "command": "find_package",
+            "source": "src/launch/CMakeLists.txt:1"
+        },
+        {
+            "arguments": [
+                "PkgConfig",
+                "REQUIRED"
+            ],
+            "command": "find_package",
+            "source": "src/services/pipewire/CMakeLists.txt:1"
+        },
+        {
+            "arguments": [
+                "pipewire",
+                "REQUIRED",
+                "IMPORTED_TARGET",
+                "libpipewire-0.3"
+            ],
+            "command": "pkg_check_modules",
+            "source": "src/services/pipewire/CMakeLists.txt:2"
+        },
+        {
+            "arguments": [
+                "PkgConfig",
+                "REQUIRED"
+            ],
+            "command": "find_package",
+            "source": "src/services/polkit/CMakeLists.txt:1"
+        },
+        {
+            "arguments": [
+                "glib",
+                "REQUIRED",
+                "IMPORTED_TARGET",
+                "glib-2.0>=2.36"
+            ],
+            "command": "pkg_check_modules",
+            "source": "src/services/polkit/CMakeLists.txt:2"
+        },
+        {
+            "arguments": [
+                "gobject",
+                "REQUIRED",
+                "IMPORTED_TARGET",
+                "gobject-2.0"
+            ],
+            "command": "pkg_check_modules",
+            "source": "src/services/polkit/CMakeLists.txt:3"
+        },
+        {
+            "arguments": [
+                "polkit_agent",
+                "REQUIRED",
+                "IMPORTED_TARGET",
+                "polkit-agent-1"
+            ],
+            "command": "pkg_check_modules",
+            "source": "src/services/polkit/CMakeLists.txt:4"
+        },
+        {
+            "arguments": [
+                "polkit",
+                "REQUIRED",
+                "IMPORTED_TARGET",
+                "polkit-gobject-1"
+            ],
+            "command": "pkg_check_modules",
+            "source": "src/services/polkit/CMakeLists.txt:5"
+        },
+        {
+            "arguments": [
+                "PkgConfig",
+                "REQUIRED"
+            ],
+            "command": "find_package",
+            "source": "src/wayland/CMakeLists.txt:1"
+        },
+        {
+            "arguments": [
+                "WaylandScanner",
+                "REQUIRED"
+            ],
+            "command": "find_package",
+            "source": "src/wayland/CMakeLists.txt:2"
+        },
+        {
+            "arguments": [
+                "wayland",
+                "REQUIRED",
+                "IMPORTED_TARGET",
+                "wayland-client",
+                "wayland-protocols>=1.41"
+            ],
+            "command": "pkg_check_modules",
+            "source": "src/wayland/CMakeLists.txt:3"
+        },
+        {
+            "arguments": [
+                "PkgConfig",
+                "REQUIRED"
+            ],
+            "command": "find_package",
+            "source": "src/wayland/buffer/CMakeLists.txt:1"
+        },
+        {
+            "arguments": [
+                "dmabuf-deps",
+                "REQUIRED",
+                "IMPORTED_TARGET",
+                "libdrm",
+                "gbm",
+                "egl"
+            ],
+            "command": "pkg_check_modules",
+            "source": "src/wayland/buffer/CMakeLists.txt:2"
+        },
+        {
+            "arguments": [
+                "VulkanHeaders",
+                "REQUIRED"
+            ],
+            "command": "find_package",
+            "source": "src/wayland/buffer/CMakeLists.txt:4"
+        },
+        {
+            "arguments": [
+                "XCB",
+                "REQUIRED",
+                "COMPONENTS",
+                "XCB"
+            ],
+            "command": "find_package",
+            "source": "src/x11/CMakeLists.txt:1"
+        }
+    ],
+    "features": {
+        "ASAN": [
+            {
+                "default": "OFF",
+                "source": "CMakeLists.txt:48"
+            }
+        ],
+        "BLUETOOTH": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:82"
+            }
+        ],
+        "BUILD_TESTING": [
+            {
+                "default": "OFF",
+                "source": "CMakeLists.txt:47"
+            }
+        ],
+        "CRASH_HANDLER": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:56"
+            }
+        ],
+        "FRAME_POINTERS": [
+            {
+                "default": "${ASAN}",
+                "source": "CMakeLists.txt:49"
+            }
+        ],
+        "HYPRLAND": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:62"
+            }
+        ],
+        "HYPRLAND_FOCUS_GRAB": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:65"
+            }
+        ],
+        "HYPRLAND_GLOBAL_SHORTCUTS": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:64"
+            }
+        ],
+        "HYPRLAND_IPC": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:63"
+            }
+        ],
+        "HYPRLAND_SURFACE_EXTENSIONS": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:66"
+            }
+        ],
+        "I3": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:72"
+            }
+        ],
+        "I3_IPC": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:73"
+            }
+        ],
+        "NETWORK": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:83"
+            }
+        ],
+        "NO_PCH": [
+            {
+                "default": "OFF",
+                "source": "CMakeLists.txt:46"
+            }
+        ],
+        "SCREENCOPY": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:67"
+            }
+        ],
+        "SCREENCOPY_HYPRLAND_TOPLEVEL": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:70"
+            }
+        ],
+        "SCREENCOPY_ICC": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:68"
+            }
+        ],
+        "SCREENCOPY_WLR": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:69"
+            }
+        ],
+        "SERVICE_GREETD": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:79"
+            }
+        ],
+        "SERVICE_MPRIS": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:76"
+            }
+        ],
+        "SERVICE_NOTIFICATIONS": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:81"
+            }
+        ],
+        "SERVICE_PAM": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:77"
+            }
+        ],
+        "SERVICE_PIPEWIRE": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:75"
+            }
+        ],
+        "SERVICE_POLKIT": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:78"
+            }
+        ],
+        "SERVICE_STATUS_NOTIFIER": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:74"
+            }
+        ],
+        "SERVICE_UPOWER": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:80"
+            }
+        ],
+        "SOCKETS": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:57"
+            }
+        ],
+        "USE_JEMALLOC": [
+            {
+                "default": "OFF",
+                "source": "CMakeLists.txt:52"
+            },
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:54"
+            }
+        ],
+        "WAYLAND": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:58"
+            }
+        ],
+        "WAYLAND_SESSION_LOCK": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:60"
+            }
+        ],
+        "WAYLAND_TOPLEVEL_MANAGEMENT": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:61"
+            }
+        ],
+        "WAYLAND_WLR_LAYERSHELL": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:59"
+            }
+        ],
+        "X11": [
+            {
+                "default": "ON",
+                "source": "CMakeLists.txt:71"
+            }
+        ]
+    },
+    "pipeline_provides": {
+        "cmake(cpptrace)": {
+            "commit": "3db8da80111171c219ab5839905771386bee06b3",
+            "published_at": "2025-07-25T16:26:40Z",
+            "repository": "jeremy-rifkin/cpptrace",
+            "sha256": "77d689fd7956ff80351a079d83e86a03865dbbe2433b4559cc6cea50bed77390",
+            "source_root": "cpptrace-3db8da80111171c219ab5839905771386bee06b3",
+            "tag": "v1.0.4",
+            "url": "https://github.com/jeremy-rifkin/cpptrace/releases/tag/v1.0.4",
+            "version": "1.0.4"
+        }
+    },
+    "policy": "Conservative union of conditional requirements; upstream defaults; no vendoring",
+    "repository_requirements": [
+        "cmake",
+        "cmake >= 3.15",
+        "cmake >= 3.20",
+        "cmake(CLI11)",
+        "cmake(GTest)",
+        "cmake(Qt6Core)",
+        "cmake(Qt6Core) >= 6.6",
+        "cmake(Qt6DBus)",
+        "cmake(Qt6Gui)",
+        "cmake(Qt6Network)",
+        "cmake(Qt6Qml)",
+        "cmake(Qt6Quick)",
+        "cmake(Qt6QuickControls2)",
+        "cmake(Qt6QuickPrivate)",
+        "cmake(Qt6ShaderTools)",
+        "cmake(Qt6Test)",
+        "cmake(Qt6WaylandClient)",
+        "cmake(Qt6WaylandClient) >= 6.10",
+        "cmake(Qt6WaylandClientPrivate)",
+        "cmake(Qt6WaylandClientPrivate) >= 6.10",
+        "cmake(Qt6Widgets)",
+        "cmake(VulkanHeaders)",
+        "cmake-rpm-macros",
+        "gcc-c++",
+        "gmock-devel",
+        "ninja-build",
+        "pam-devel",
+        "pkgconf-pkg-config",
+        "pkgconfig(egl)",
+        "pkgconfig(gbm)",
+        "pkgconfig(glib-2.0)",
+        "pkgconfig(glib-2.0) >= 2.36",
+        "pkgconfig(gobject-2.0)",
+        "pkgconfig(jemalloc)",
+        "pkgconfig(libdrm)",
+        "pkgconfig(libdwarf) >= 2.1",
+        "pkgconfig(libpipewire-0.3)",
+        "pkgconfig(libunwind)",
+        "pkgconfig(libzstd)",
+        "pkgconfig(polkit-agent-1)",
+        "pkgconfig(polkit-gobject-1)",
+        "pkgconfig(wayland-client)",
+        "pkgconfig(wayland-protocols)",
+        "pkgconfig(wayland-protocols) >= 1.41",
+        "pkgconfig(xcb)",
+        "pkgconfig(zlib)",
+        "qt6-qtbase-private-devel",
+        "qt6-qtdeclarative-private-devel",
+        "spirv-tools",
+        "vulkan-headers",
+        "wayland-devel"
+    ],
+    "requirements": [
+        {
+            "capability": "cmake",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:33"
+        },
+        {
+            "capability": "cmake >= 3.20",
+            "reason": "CMake minimum version",
+            "source": "CMakeLists.txt:1"
+        },
+        {
+            "capability": "cmake(CLI11)",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:40"
+        },
+        {
+            "capability": "cmake(CLI11)",
+            "reason": "CMake package",
+            "source": "src/launch/CMakeLists.txt:1"
+        },
+        {
+            "capability": "cmake(Qt6Core)",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:34"
+        },
+        {
+            "capability": "cmake(Qt6Core) >= 6.6",
+            "reason": "Qt minimum version",
+            "source": "CMakeLists.txt:151"
+        },
+        {
+            "capability": "cmake(Qt6DBus)",
+            "reason": "Documented feature dependency",
+            "source": "BUILD.md:178"
+        },
+        {
+            "capability": "cmake(Qt6DBus)",
+            "reason": "Documented feature dependency",
+            "source": "BUILD.md:185"
+        },
+        {
+            "capability": "cmake(Qt6DBus)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "capability": "cmake(Qt6Gui)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "capability": "cmake(Qt6Network)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "capability": "cmake(Qt6Qml)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "capability": "cmake(Qt6Quick)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "capability": "cmake(Qt6QuickControls2)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "capability": "cmake(Qt6QuickPrivate)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:147"
+        },
+        {
+            "capability": "cmake(Qt6ShaderTools)",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:37"
+        },
+        {
+            "capability": "cmake(Qt6ShaderTools)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "capability": "cmake(Qt6Test)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "capability": "cmake(Qt6WaylandClient)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "capability": "cmake(Qt6WaylandClient) >= 6.10",
+            "reason": "CMake package",
+            "source": "src/wayland/CMakeLists.txt:2"
+        },
+        {
+            "capability": "cmake(Qt6WaylandClientPrivate)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:147"
+        },
+        {
+            "capability": "cmake(Qt6WaylandClientPrivate) >= 6.10",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:106"
+        },
+        {
+            "capability": "cmake(Qt6WaylandClientPrivate) >= 6.10",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:54"
+        },
+        {
+            "capability": "cmake(Qt6Widgets)",
+            "reason": "Qt component (all branches inventoried)",
+            "source": "CMakeLists.txt:141"
+        },
+        {
+            "capability": "cmake(VulkanHeaders)",
+            "reason": "CMake package",
+            "source": "src/wayland/buffer/CMakeLists.txt:4"
+        },
+        {
+            "capability": "cmake(cpptrace)",
+            "reason": "Documented feature dependency",
+            "source": "BUILD.md:70"
+        },
+        {
+            "capability": "cmake(cpptrace)",
+            "reason": "CMake package",
+            "source": "src/crash/CMakeLists.txt:23"
+        },
+        {
+            "capability": "cmake-rpm-macros",
+            "reason": "Packaging toolchain / private headers / direct linkage",
+            "source": "policy"
+        },
+        {
+            "capability": "gcc-c++",
+            "reason": "Packaging toolchain / private headers / direct linkage",
+            "source": "policy"
+        },
+        {
+            "capability": "ninja-build",
+            "reason": "Packaging toolchain / private headers / direct linkage",
+            "source": "policy"
+        },
+        {
+            "capability": "pam-devel",
+            "reason": "Documented feature dependency",
+            "source": "BUILD.md:192"
+        },
+        {
+            "capability": "pam-devel",
+            "reason": "Packaging toolchain / private headers / direct linkage",
+            "source": "policy"
+        },
+        {
+            "capability": "pkgconf-pkg-config",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:39"
+        },
+        {
+            "capability": "pkgconf-pkg-config",
+            "reason": "CMake package",
+            "source": "CMakeLists.txt:157"
+        },
+        {
+            "capability": "pkgconf-pkg-config",
+            "reason": "CMake package",
+            "source": "src/services/pipewire/CMakeLists.txt:1"
+        },
+        {
+            "capability": "pkgconf-pkg-config",
+            "reason": "CMake package",
+            "source": "src/services/polkit/CMakeLists.txt:1"
+        },
+        {
+            "capability": "pkgconf-pkg-config",
+            "reason": "CMake package",
+            "source": "src/wayland/CMakeLists.txt:1"
+        },
+        {
+            "capability": "pkgconf-pkg-config",
+            "reason": "CMake package",
+            "source": "src/wayland/buffer/CMakeLists.txt:1"
+        },
+        {
+            "capability": "pkgconfig(egl)",
+            "reason": "pkg-config module",
+            "source": "src/wayland/buffer/CMakeLists.txt:2"
+        },
+        {
+            "capability": "pkgconfig(gbm)",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:146"
+        },
+        {
+            "capability": "pkgconfig(gbm)",
+            "reason": "pkg-config module",
+            "source": "src/wayland/buffer/CMakeLists.txt:2"
+        },
+        {
+            "capability": "pkgconfig(glib-2.0)",
+            "reason": "Documented feature dependency",
+            "source": "BUILD.md:199"
+        },
+        {
+            "capability": "pkgconfig(glib-2.0) >= 2.36",
+            "reason": "pkg-config module",
+            "source": "src/services/polkit/CMakeLists.txt:2"
+        },
+        {
+            "capability": "pkgconfig(gobject-2.0)",
+            "reason": "pkg-config module",
+            "source": "src/services/polkit/CMakeLists.txt:3"
+        },
+        {
+            "capability": "pkgconfig(jemalloc)",
+            "reason": "Documented feature dependency",
+            "source": "BUILD.md:89"
+        },
+        {
+            "capability": "pkgconfig(jemalloc)",
+            "reason": "pkg-config module",
+            "source": "CMakeLists.txt:159"
+        },
+        {
+            "capability": "pkgconfig(libdrm)",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:36"
+        },
+        {
+            "capability": "pkgconfig(libdrm)",
+            "reason": "pkg-config module",
+            "source": "src/core/CMakeLists.txt:1"
+        },
+        {
+            "capability": "pkgconfig(libdrm)",
+            "reason": "pkg-config module",
+            "source": "src/wayland/buffer/CMakeLists.txt:2"
+        },
+        {
+            "capability": "pkgconfig(libpipewire-0.3)",
+            "reason": "Documented feature dependency",
+            "source": "BUILD.md:171"
+        },
+        {
+            "capability": "pkgconfig(libpipewire-0.3)",
+            "reason": "pkg-config module",
+            "source": "src/services/pipewire/CMakeLists.txt:2"
+        },
+        {
+            "capability": "pkgconfig(polkit-agent-1)",
+            "reason": "Documented feature dependency",
+            "source": "BUILD.md:199"
+        },
+        {
+            "capability": "pkgconfig(polkit-agent-1)",
+            "reason": "pkg-config module",
+            "source": "src/services/polkit/CMakeLists.txt:4"
+        },
+        {
+            "capability": "pkgconfig(polkit-gobject-1)",
+            "reason": "pkg-config module",
+            "source": "src/services/polkit/CMakeLists.txt:5"
+        },
+        {
+            "capability": "pkgconfig(wayland-client)",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:107"
+        },
+        {
+            "capability": "pkgconfig(wayland-client)",
+            "reason": "pkg-config module",
+            "source": "src/wayland/CMakeLists.txt:3"
+        },
+        {
+            "capability": "pkgconfig(wayland-protocols)",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:109"
+        },
+        {
+            "capability": "pkgconfig(wayland-protocols) >= 1.41",
+            "reason": "pkg-config module",
+            "source": "src/wayland/CMakeLists.txt:3"
+        },
+        {
+            "capability": "pkgconfig(xcb)",
+            "reason": "Documented feature dependency",
+            "source": "BUILD.md:164"
+        },
+        {
+            "capability": "pkgconfig(xcb)",
+            "reason": "CMake package",
+            "source": "src/x11/CMakeLists.txt:1"
+        },
+        {
+            "capability": "qt6-qtbase-private-devel",
+            "reason": "Packaging toolchain / private headers / direct linkage",
+            "source": "policy"
+        },
+        {
+            "capability": "qt6-qtdeclarative-private-devel",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:35"
+        },
+        {
+            "capability": "qt6-qtdeclarative-private-devel",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:53"
+        },
+        {
+            "capability": "qt6-qtdeclarative-private-devel",
+            "reason": "Packaging toolchain / private headers / direct linkage",
+            "source": "policy"
+        },
+        {
+            "capability": "spirv-tools",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:38"
+        },
+        {
+            "capability": "spirv-tools",
+            "reason": "Packaging toolchain / private headers / direct linkage",
+            "source": "policy"
+        },
+        {
+            "capability": "vulkan-headers",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:147"
+        },
+        {
+            "capability": "wayland-devel",
+            "reason": "Documented dependency",
+            "source": "BUILD.md:108"
+        }
+    ],
+    "source_dependencies": {
+        "cpptrace": {
+            "repository": "jeremy-rifkin/cpptrace",
+            "source": "src/crash/CMakeLists.txt:14",
+            "tag": "v1.0.4"
+        }
+    }
+}
