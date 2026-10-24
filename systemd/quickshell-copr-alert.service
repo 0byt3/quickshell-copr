@@ -1,0 +1,13 @@
+[Unit]
+Description=Email fallback for a failed or interrupted Quickshell pipeline
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=quickshell-copr
+Group=quickshell-copr
+WorkingDirectory=/srv/quickshell-copr
+UMask=0077
+ExecStart=/usr/bin/python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml --notify-only
+TimeoutStartSec=180

@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Quickshell release check
+
+[Timer]
+OnCalendar=*-*-* 06:23:00 UTC
+Persistent=true
+RandomizedDelaySec=10m
+Unit=quickshell-copr.service
+
+[Install]
+WantedBy=timers.target

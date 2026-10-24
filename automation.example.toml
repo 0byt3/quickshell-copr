@@ -1,0 +1,30 @@
+# Copy outside the checkout, for example /etc/quickshell-copr/automation.toml.
+# Alerts connect directly to your SMTP provider; no local mail service is needed.
+alert_from = "quickshell-copr@example.com"
+alert_to = [
+    "operator@example.com",
+]
+
+# These files contain only the corresponding value, not KEY=value or TOML.
+# Owner: the service account. Permissions: 0400 or 0600.
+copr_login_file = "/etc/quickshell-copr/copr-login"
+copr_token_file = "/etc/quickshell-copr/copr-token"
+
+# Per subprocess, including container validation and both ordered COPR builds.
+stage_timeout_seconds = 18000
+
+[smtp]
+host = "smtp.example.com"
+port = 587
+# "starttls": require STARTTLS (usually port 587).
+# "tls": TLS from connection start (usually port 465).
+# Certificate and hostname verification are always enabled; no plaintext mode.
+security = "starttls"
+timeout_seconds = 10
+username = "quickshell-copr@example.com"
+password_file = "/etc/quickshell-copr/smtp-password"
+
+# Optional for a private relay CA; omit to use the system CA trust store.
+# ca_file = "/etc/quickshell-copr/smtp-ca.pem"
+# For a trusted relay that does not require authentication, omit BOTH username
+# and password_file. TLS is still required.

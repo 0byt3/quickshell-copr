@@ -38,7 +38,6 @@ def inputs_hash(project):
     paths = [
         project / "config.toml",
         *sorted((project / "qscopr").glob("*.py")),
-        *sorted((project / ".github" / "workflows").glob("*.yml")),
     ]
     for path in paths:
         digest.update(str(path.relative_to(project)).encode() + b"\0")

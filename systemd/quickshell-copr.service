@@ -1,0 +1,17 @@
+[Unit]
+Description=Validate and publish Quickshell Fedora RPMs
+Wants=network-online.target
+After=network-online.target
+OnFailure=quickshell-copr-alert.service
+
+[Service]
+Type=oneshot
+User=quickshell-copr
+Group=quickshell-copr
+WorkingDirectory=/srv/quickshell-copr
+Environment=PYTHONUNBUFFERED=1
+UMask=0077
+ExecStart=/usr/bin/python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml
+TimeoutStartSec=8h
+TimeoutStopSec=120
+KillMode=control-group

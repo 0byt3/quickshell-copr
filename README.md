@@ -13,6 +13,17 @@ tests, and packages it as runtime/devel RPMs. All of cpptrace's own dependencies
 must resolve from official Fedora repositories. Quickshell uses those installed
 RPMs, never a vendored source tree.
 
+**GitHub Actions is not used.** The complete unattended pipeline runs on your own
+server with one command, from the checkout:
+
+```bash
+python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml
+```
+
+This command **publishes to COPR** after successful validation. Configure the
+server, credentials, and alert delivery as described below before running it.
+For a build/check without publication, use the local commands in the next section.
+
 ## Local use
 
 Requirements:
@@ -152,82 +163,246 @@ Containers and their temporary prepared image are removed automatically on norma
 exit. A killed host process may leave UUID-named `qscopr-*` resources to inspect and
 remove manually. The pulled Fedora base image remains cached.
 
-Only validated state is tracked. Blocked releases are tried again on the next
-scheduled run, allowing Fedora package updates to unblock them.
+Only validated packaging is maintained. Blocked releases are tried again on the
+next scheduled run, allowing Fedora package updates to unblock them. The server
+runner treats blocked releases as failures and emails an alert.
 
-## GitHub Actions setup
+## Server automation
 
-1. Host this project in a GitHub repository and enable Actions. Initializing Git,
-   committing, and creating a remote repository are separate setup actions.
-2. Review `config.toml`. Initially only Fedora 44 x86_64 and its official image are
-   supported. `jobs` limits parallel compilation (default 2).
-3. Permit GitHub Actions to create pull requests in the repository's Actions
-   settings. The proposal job uses the repository's `GITHUB_TOKEN`; build jobs have
-   read-only repository access and checkout credentials are not persisted.
-4. Run **Fedora 44 release gate** manually once to verify the setup.
+The entry point is `python3 -m qscopr.automate`. No GitHub Actions, GitHub tokens,
+automatic commits, pushes, or packaging pull requests are involved. GitHub is
+still used to discover/download upstream releases.
 
-Workflows:
+Each invocation:
 
-- `tests.yml`: unit tests and Python syntax checks on pushes and pull requests.
-- `releases.yml`: daily polling at **06:23 UTC**, manual tag/force inputs, optional
-  `quickshell-release` repository dispatch, and relevant pull-request checks.
-  A release in another repository does not trigger this repository directly.
-- `publish.yml`: opt-in COPR publishing after a maintained packaging update lands
-  on the default branch, or by manual dispatch on that branch.
+1. Acquires an exclusive project lock. An overlapping invocation skips with exit
+   `0` without changing the active run's state.
+2. Checks SMTP settings, private credential files, and the Python COPR client.
+3. Runs the unit tests and Python syntax checks.
+4. Discovers the selected/latest stable release and runs the Fedora container gate.
+5. Promotes successful new/rebuilt packaging directly into `packaging/`.
+6. Verifies the publication manifest and artifact hashes.
+7. Publishes cpptrace to COPR, waits for overall/chroot success, then publishes
+   Quickshell and waits for its success.
+8. Records a publication receipt **only after both COPR builds succeed**.
 
-The release workflow proposes changes on `automation/quickshell-release`.
-Automatic PRs created using `GITHUB_TOKEN` do not normally trigger other workflows;
-review the originating build's report or use a narrowly scoped GitHub App token if
-your repository requires independent PR-triggered CI. No App token is configured
-by this project. Merge the validated update through your normal review policy.
+The first failed or blocked stage stops the pipeline, prevents later stages,
+submits a failure email, and returns `1`. The underlying checker retains its
+separate `0`/`1`/`2` exit codes; the runner records that stage's exit code in
+`run.json`. Success or an already-published unchanged release returns `0`.
 
-Dependency/discovery blocks are reported without advancing state or publishing.
-Scheduled blocks do not mark the workflow failed; build/infrastructure failures
-do. Pull-request gate blocks fail the PR check. Artifacts are retained for 14 days.
+An `unchanged` release is skipped only when the maintained validation/spec hashes
+match `artifacts/automation/published.json`. If promotion succeeded but publication
+failed or was interrupted, the next run **revalidates the maintained release and
+retries publication**, rather than silently treating it as finished. Existing
+COPR builds are monitored/reused instead of blindly uploaded again.
 
-## COPR setup and opt-in publication
+### Server prerequisites and configuration
 
-Publication is disabled initially. To enable it:
+Use a dedicated service account and a persistent, writable checkout, such as
+`/srv/quickshell-copr`. Install software from your server distribution's
+repositories:
 
-1. Create/configure your own COPR project with `fedora-44-x86_64` enabled. Prefer a
-   dedicated project. Do not add third-party repositories or injected buildroot
-   packages. This tool does not edit COPR project configuration.
-2. Set `copr.project = "YOUR_OWNER/YOUR_PROJECT"` and an identifying
-   `copr.distributor` in `config.toml` **before validating**.
-3. Create a GitHub environment named `copr`, restrict it to the default branch,
-   and configure required reviewers if desired.
-4. Store `COPR_LOGIN` and `COPR_TOKEN` as environment secrets. Obtain them from your
-   COPR API page. Do not put credentials in this repository.
-5. Set the repository variable `ENABLE_COPR_PUBLISH` to `true`.
-6. Obtain and merge a successful validated packaging update.
+- Python 3.12 or newer.
+- The Python COPR client (`python3-copr` on Fedora), available to the same Python
+  interpreter used by the service. No pip installation is needed on Fedora.
+- Docker with daemon access, or Podman if Docker is absent. The checker prefers
+  Docker when both are installed, so it must actually work for the service account.
+- An SMTP provider or trusted relay that supports STARTTLS or implicit TLS.
+  Alerts use Python's standard library directly; no sendmail, Postfix, local mail
+  service, or extra Python email package is required.
+- System CA certificates for verifying the SMTP server, or a configured private
+  CA certificate file when using your own relay.
+- Network access to upstream GitHub, Fedora repositories/container registry,
+  COPR, and the SMTP server, plus sufficient disk/RAM for the builds.
 
-Publishing first rebuilds the **tracked release**, with no COPR secrets present.
-It verifies both maintained specs, source identities, build-input hash, artifact
-checksums, and installed dependency fingerprint. Changed inputs/dependencies
-require a newly validated update rather than publishing stale approval.
+For rootless Podman, configure the service account's runtime directory/user
+manager as required by the server distribution. The supplied system units do not
+provision that runtime. Docker daemon access is effectively root-level access;
+grant it only to a trusted service account.
 
-The separate protected publisher job installs `python3-copr` from Fedora's
-repositories and downloads only the fresh verified SRPMs/manifest from that same
-trusted workflow run. It uploads cpptrace first and waits for overall and Fedora 44
-chroot success before submitting Quickshell, recording the prerequisite build ID
-in Quickshell's result. It does not use COPR's batch dependency option: COPR cannot
-create a batch around an already finished build, and batch completion alone does
-not guarantee prerequisite success.
-Build networking is disabled for both. No PR-supplied artifact is consumed.
-COPR imports the submitted SRPM's spec; there is no direct edit of COPR's generated
-dist-git.
+Configure the server:
 
-The publisher checks paginated build history to avoid resubmitting the same
-name/version/release/chroot, and serializes its workflow runs. Already submitted
-builds are monitored instead of uploaded again. Failed/canceled/skipped versions
-require a validated higher RPM Release. Avoid independent publishers racing for
-the same NVR: COPR has no transaction-wide exactly-once upload lock here.
+1. Review `config.toml`: Fedora 44 x86_64, compilation `jobs` (default `2`), and the
+   destination COPR project/distributor. The current destination is
+   `byte0/quickshell`; change it before validating if using another project.
+2. Configure the COPR project with `fedora-44-x86_64` enabled, without third-party
+   repositories or injected buildroot packages. The tool does not change the
+   project's COPR configuration.
+3. Copy `automation.example.toml` to `/etc/quickshell-copr/automation.toml`, edit
+   the sender/recipient addresses, `[smtp]` connection settings, and credential
+   paths, and make it readable by the service account. Keep server configuration
+   outside the checkout. Remove the old `sendmail` key when migrating.
+4. Obtain credentials from your COPR API page. Store the login and token in
+   separate files at the configured paths, each containing **only its value**,
+   not `KEY=value`. If your SMTP provider requires authentication, also store its
+   password/app password in the separate `smtp.password_file`. Create/populate
+   these files using your editor or secret manager, never an inline shell command
+   that leaves credentials in history.
+5. Make credential files owned by the service account with mode `0400` or `0600`,
+   and protect their parent directory. Group/world-readable files are refused.
+6. Make the checkout, `packaging/`, and `artifacts/` writable by the service account.
+   Do not run independent manual packaging/publishing commands concurrently with
+   the automation runner; they do not participate in its lock.
 
-Results and COPR build links are in `cpptrace-copr-result.json` and
-`copr-result.json`. COPR can still fail
-despite the container gate (for example, if Fedora repositories change in between).
-Local validation is not a promise of publication or of a successful COPR build.
-Live COPR publication is not part of the unit tests.
+COPR credentials are supplied only in the separate publisher subprocess's
+environment, never in command arguments, test/check subprocess environments,
+container build environments, email bodies, or log attachments. The runner itself
+also privately reads the credential files during preflight. The SMTP password is
+read directly from its private file and is never supplied to build, test, or
+publisher subprocesses.
+
+### Direct SMTP alerts
+
+Configure the `[smtp]` table in `automation.example.toml` for your provider:
+
+- `host`: SMTP server hostname, not an `smtp://` URL.
+- `security = "starttls"`: require STARTTLS before authentication or sending.
+  The default port is `587`.
+- `security = "tls"`: establish TLS immediately. The default port is `465`.
+- `username` and `password_file`: configure both for authenticated submission.
+  Use an application password if your provider requires one. The sender address
+  must be permitted by that provider.
+- For a trusted relay without authentication, omit **both** authentication keys.
+  TLS is still required.
+- `timeout_seconds`: socket-operation timeout, default `10`, allowed `1`–`60`.
+- `ca_file`: optional absolute path to a private relay's CA certificate bundle;
+  otherwise Python uses the system CA trust store.
+
+Certificate-chain and hostname verification are always enabled. There is no
+plaintext mode, automatic TLS downgrade, or certificate-verification bypass.
+SMTP authentication failures, connection/TLS errors, and rejection of **any**
+recipient are failures, not successful notification delivery. SMTP error details
+are not printed because a server response may contain sensitive information.
+
+Before enabling a schedule, run this **as the service account**, from the checkout:
+
+```bash
+python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml --test-email
+```
+
+Verify the email actually arrives. Exit `0` only confirms acceptance by the SMTP
+server for every configured recipient, not final inbox delivery. Then run the
+full command manually once:
+
+```bash
+python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml
+```
+
+### systemd timer
+
+Example units are in `systemd/`. Review the service account, checkout path, Python
+path, and settings path before installation. The examples assume a provisioned
+`quickshell-copr` user/group and checkout at `/srv/quickshell-copr`.
+
+Install the reviewed units on the **server**, not the development machine:
+
+```bash
+sudo install -m 0644 systemd/quickshell-copr.service /etc/systemd/system/
+sudo install -m 0644 systemd/quickshell-copr-alert.service /etc/systemd/system/
+sudo install -m 0644 systemd/quickshell-copr.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now quickshell-copr.timer
+```
+
+The timer runs daily at **06:23 UTC**, with up to ten minutes of randomized delay,
+and catches up after downtime. The service has an eight-hour overall timeout;
+individual stages default to five hours (`stage_timeout_seconds` in settings).
+Adjust both limits together for slower servers. The alert service allows three
+minutes for SMTP negotiation/submission; review that limit too if increasing
+SMTP socket timeouts.
+
+Inspect or trigger it:
+
+```bash
+systemctl list-timers quickshell-copr.timer
+sudo systemctl start quickshell-copr.service
+journalctl -u quickshell-copr.service -u quickshell-copr-alert.service
+```
+
+Ordinary failures are emailed by the runner. `OnFailure` starts the alert service
+as a fallback if the main process is terminated, times out, or cannot submit its
+alert. It avoids a duplicate alert when the runner already recorded successful
+mail submission for that systemd invocation, without suppressing a new failure
+using an older run's notification.
+
+Email cannot be guaranteed during a host/network outage, a broken Python/settings
+installation, or an unavailable SMTP provider. A missing/malformed settings file
+exits nonzero but cannot provide its own email configuration. Monitor the server
+and mail provider independently if delivery guarantees are important. There is no
+local mail queue: failed SMTP submission returns nonzero and leaves the failure
+unacknowledged, allowing the systemd fallback to try again. Repeated provider
+outages still need independent monitoring.
+
+### cron alternative
+
+Use the dedicated account's crontab **instead of** the timer. Configure cron's
+`PATH` so Docker/Podman can be found. This example uses the server's cron timezone:
+
+```cron
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+23 6 * * * cd /srv/quickshell-copr && /usr/bin/python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml >> /srv/quickshell-copr/artifacts/cron.log 2>&1
+```
+
+The Python command owns the full flow and alerts on ordinary failures; no chain of
+separate build/publish shell commands is needed. Create the writable `artifacts/`
+directory before scheduling. Cron's own mail is disabled; alerts go directly over
+SMTP and command output is retained in `artifacts/cron.log`. Unlike the supplied
+systemd setup, plain cron has no `OnFailure` fallback if the runner itself is
+killed. Prefer systemd for timeout/termination monitoring.
+
+### Artifacts and recovery
+
+Each run creates a unique directory under `artifacts/automation/` containing
+`pipeline.log`, `run.json`, and `check/` or `verify/` gate artifacts.
+`latest.json` records the latest run/stage. `published.json` is the last successful
+publication receipt. COPR links and outcomes are in the gate attempt's
+`cpptrace-copr-result.json` and `copr-result.json`.
+
+- Dependency/discovery blocks and build failures stop and alert. Review the logs;
+  the next scheduled run retries, without promoting a blocked build.
+- Interrupted/incomplete publication is retried even when the release is
+  unchanged. A failed/canceled/skipped COPR NVR cannot be reused: run the full
+  command with `--force` to validate a higher RPM Release.
+- If Fedora dependencies changed before an incomplete publication could be
+  revalidated, use `--force` for a fresh validated rebuild instead of stale approval.
+- Do not delete or edit maintained validation, hashes, or receipts to bypass
+  guards. Preserve the checkout's `packaging/` and `published.json` when moving
+  servers. Removing a success receipt causes revalidation, not blind trust.
+- Code/configuration changes, including this migration away from Actions,
+  invalidate previous build inputs and require a fresh validated build.
+- Artifacts have **no automatic retention limit**. Prune/archive old per-run
+  directories when no run is active, but preserve `published.json`, `latest.json`,
+  and `.lock`. A forcibly killed build can also leave UUID-named container
+  resources, as described above.
+
+The local lock protects this checkout only. Avoid multiple servers/checkouts
+publishing the same NVR concurrently: COPR has no transaction-wide exactly-once
+upload lock here.
+
+### Publication safeguards
+
+Checking/promoting alone never publishes. The automation command intentionally
+opts into publication; the separate `qscopr.publish` module still requires
+`ENABLE_COPR_PUBLISH=true` and `COPR_LOGIN`/`COPR_TOKEN` in its environment when
+invoked independently.
+
+Publication verifies maintained specs, source identities, build-input hashes,
+artifact checksums, and installed dependency fingerprints. The fresh successful
+gate can be published directly after promotion; retrying an unchanged, incomplete
+publication first rebuilds the tracked release with `--verify-tracked`.
+
+The publisher uploads cpptrace first and waits for overall and Fedora 44 chroot
+success before submitting Quickshell, recording the prerequisite build ID. It
+does not use COPR's batch dependency option: batch completion alone does not
+guarantee prerequisite success. Build networking is disabled for both. COPR
+imports the submitted SRPM's spec; there is no direct edit of generated dist-git.
+
+Paginated build history prevents blind duplicate uploads; existing builds are
+monitored instead. COPR can still fail despite local validation, for example if
+Fedora repositories change. Live publication and real email delivery are not
+part of the unit tests.
 
 ## Qt updates and rebuilds
 
@@ -240,9 +415,16 @@ Force a same-version rebuild after Fedora/Qt updates:
 python3 -m qscopr check --force --output artifacts/qt-rebuild --promote
 ```
 
-This increases RPM `Release` for an already validated version. Use the workflow's
-`force` input for the same operation in CI. Changes to project build inputs also
-trigger revalidation automatically; dependency-only changes need a forced check.
+This increases RPM `Release` for an already validated version. To run the **entire
+pipeline including COPR publication** after Fedora/Qt updates:
+
+```bash
+python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml --force
+```
+
+Use `--tag v0.3.2` to select a particular published stable release; downgrades and
+moved tags remain refused. Changes to project build inputs trigger revalidation
+automatically; dependency-only changes need a forced check.
 Each newly validated pipeline also increases cpptrace's RPM `Release`, allowing
 safe retries/rebuilds without reusing a previously failed COPR NVR.
 Generated RPM requirements retain Fedora's automatic Qt private-API ABI guards.
@@ -258,3 +440,7 @@ python3 -m compileall -q qscopr tests
 
 Run the real repository/container gate separately with a fresh output directory.
 Do not treat mocked success tests as evidence that Quickshell compiled.
+SMTP integration tests use a local capture-only TLS server and ephemeral
+certificates, never an external provider or real recipient. They use the
+`openssl` executable to generate test certificates and are skipped if it is not
+installed; the production SMTP sender itself needs only Python's standard library.
