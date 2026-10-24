@@ -4,7 +4,7 @@
 
 Name: quickshell
 Version: 0.3.2
-Release: 1%{?dist}
+Release: 2%{?dist}
 Summary: Flexible QtQuick based desktop shell toolkit
 License: LGPL-3.0-only AND GPL-3.0-only
 URL: https://quickshell.org/
@@ -73,7 +73,7 @@ and other desktop components using QtQuick, for Wayland and X11.
     -DVENDOR_CPPTRACE=OFF \
     -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
     -DFETCHCONTENT_UPDATES_DISCONNECTED=ON \
-    -DDISTRIBUTOR="Fedora COPR (quickshell-copr)" \
+    -DDISTRIBUTOR="Fedora COPR (byte0/quickshell)" \
     -DGIT_REVISION=%{commit} \
     -DINSTALL_QML_PREFIX=%{_lib}/qt6/qml
 %cmake_build

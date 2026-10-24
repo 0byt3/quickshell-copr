@@ -12,5 +12,5 @@ sha256 = "77d689fd7956ff80351a079d83e86a03865dbbe2433b4559cc6cea50bed77390"
 rpm_release = 1
 
 [copr]
-project = ""
-distributor = "Fedora COPR (quickshell-copr)"
+project = "byte0/quickshell"
+distributor = "Fedora COPR (byte0/quickshell)"
