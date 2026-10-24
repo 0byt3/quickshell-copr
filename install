@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+"""Install this checkout's COPR automation as a system-wide systemd timer."""
+
+import argparse
+import os
+import pwd
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+SOURCE = Path(__file__).resolve().parent
+UNIT_DIRECTORY = Path("/etc/systemd/system")
+UNITS = (
+    "quickshell-copr.service",
+    "quickshell-copr-alert.service",
+    "quickshell-copr.timer",
+)
+SERVICE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Run only as the service account. Credential files are inspected, never read.
+PREFLIGHT = """
+import os
+import shutil
+import ssl
+import stat
+import sys
+from pathlib import Path
+
+stage = "Python version"
+try:
+    if sys.version_info < (3, 12):
+        raise ValueError("Python 3.12 or newer is required")
+    stage = "Python COPR client"
+    import copr.v3
+    stage = "automation and build configuration"
+    from qscopr.automate import load_settings
+    from qscopr.gate import load_config
+    settings = load_settings(Path(sys.argv[1]))
+    load_config(Path.cwd())
+    stage = "private credential-file permissions and readability"
+    paths = [settings["copr_login_file"], settings["copr_token_file"]]
+    if "password_file" in settings["smtp"]:
+        paths.append(settings["smtp"]["password_file"])
+    for value in paths:
+        path = Path(value)
+        metadata = path.stat()
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) not in [0o400, 0o600]
+            or metadata.st_size == 0
+            or not os.access(path, os.R_OK)
+        ):
+            raise ValueError("Private readable nonempty credential files are required")
+    stage = "SMTP certificate trust"
+    ssl.create_default_context(cafile=settings["smtp"].get("ca_file"))
+    stage = "checkout and build-directory write access"
+    for path in [Path.cwd(), Path("qscopr"), Path("tests"), Path("packaging")]:
+        if not path.is_dir() or not os.access(path, os.R_OK | os.W_OK | os.X_OK):
+            raise PermissionError("The service account needs access to the checkout")
+    if Path("artifacts").exists() and not os.access("artifacts", os.R_OK | os.W_OK | os.X_OK):
+        raise PermissionError("The service account needs access to artifacts")
+    stage = "container runtime"
+    if not (shutil.which("docker") or shutil.which("podman")):
+        raise ValueError("Install Docker or Podman from distribution repositories")
+except Exception as error:
+    print(f"Preflight failed at {stage} ({type(error).__name__}); see README.md.", file=sys.stderr)
+    sys.exit(1)
+print("Service-account prerequisite checks passed; no builds or emails were started.")
+"""
+
+
+class InstallError(Exception):
+    pass
+
+
+def checked_path(value, resolve=True):
+    path = Path(value).expanduser()
+    result = path.resolve() if resolve else path.absolute()
+    for candidate in [str(value), str(result)]:
+        if any(ord(character) < 32 or ord(character) == 127 or character in "\"'\\" for character in candidate):
+            raise InstallError("Paths must not contain control characters, quotes, or backslashes.")
+    return result
+
+
+def exec_argument(value):
+    # systemd does its own % specifier and $ environment expansion, not shell
+    # expansion. Preserve literal dollars/percents even inside quoted arguments.
+    value = str(value).replace("%", "%%").replace("$", "$$")
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def render_units(options):
+    arguments = [
+        options.python,
+        "-m",
+        "qscopr.automate",
+        "--config",
+        options.config,
+    ]
+    command = " ".join(exec_argument(argument) for argument in arguments)
+    rendered = {}
+    for name in UNITS:
+        lines = []
+        for line in (SOURCE / "systemd" / name).read_text().splitlines():
+            if line.startswith("User="):
+                line = f"User={options.user}"
+            elif line.startswith("Group="):
+                # systemd uses the selected account's primary group by default.
+                continue
+            elif line.startswith("WorkingDirectory="):
+                line = "WorkingDirectory=" + str(options.project).replace("%", "%%")
+            elif line.startswith("ExecStart="):
+                line = "ExecStart=" + command
+                if name == "quickshell-copr-alert.service":
+                    line += ' "--notify-only"'
+            elif line.startswith("OnCalendar="):
+                line = "OnCalendar=" + options.calendar
+            lines.append(line)
+        rendered[name] = "\n".join(lines) + "\n"
+    return rendered
+
+
+def verify_units(units, calendar):
+    subprocess.run(
+        ["systemd-analyze", "calendar", calendar],
+        stdout=subprocess.DEVNULL,
+        check=True,
+    )
+    with tempfile.TemporaryDirectory(prefix="quickshell-copr-units-") as directory:
+        paths = []
+        for name, content in units.items():
+            path = Path(directory) / name
+            path.write_text(content)
+            paths.append(str(path))
+        subprocess.run(["systemd-analyze", "verify", *paths], check=True)
+
+
+def check_prerequisites(options):
+    try:
+        account = pwd.getpwnam(options.user)
+    except KeyError:
+        raise InstallError("Create the service account first, or select an existing account with --user.") from None
+    if account.pw_uid == 0:
+        raise InstallError("The pipeline must run as a non-root service account.")
+    if not options.config.is_file():
+        raise InstallError("Create the automation settings and private credential files first; see README.md.")
+    subprocess.run(
+        ["runuser", "--user", options.user, "--", str(options.python), "-c", PREFLIGHT, str(options.config)],
+        cwd=options.project,
+        env={
+            "PATH": SERVICE_PATH,
+            "LANG": "C.UTF-8",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        },
+        check=True,
+    )
+
+
+def ensure_idle():
+    for name in UNITS[:2]:
+        result = subprocess.run(
+            ["systemctl", "show", "--property=ActiveState", "--value", name],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if result.stdout.strip() not in ["inactive", "failed"]:
+            # Type=oneshot stays "activating" throughout its long-running build.
+            raise InstallError("A pipeline or alert service is active; wait for it to finish before installing.")
+
+
+def atomic_unit(path, content):
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, prefix=".quickshell-copr-", delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(content)
+            stream.flush()
+            os.fchmod(stream.fileno(), 0o644)
+            os.fsync(stream.fileno())
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+    try:
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def install_units(units, enable):
+    if not UNIT_DIRECTORY.is_dir():
+        raise InstallError("/etc/systemd/system is missing; this installer requires a systemd server.")
+    for name in UNITS:
+        path = UNIT_DIRECTORY / name
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            raise InstallError("An existing unit is a symlink or special file; resolve it manually before installing.")
+    ensure_idle()
+    timer = subprocess.run(
+        ["systemctl", "show", "--property=LoadState", "--value", "quickshell-copr.timer"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if timer.stdout.strip() != "not-found":
+        subprocess.run(["systemctl", "stop", "quickshell-copr.timer"], check=True)
+    # Close the race where the old timer fired just before it was stopped.
+    ensure_idle()
+    changed = [
+        name
+        for name, content in units.items()
+        if (UNIT_DIRECTORY / name).exists() and (UNIT_DIRECTORY / name).read_text() != content
+    ]
+    if changed:
+        backup = Path(tempfile.mkdtemp(prefix="quickshell-copr-backup-", dir=UNIT_DIRECTORY))
+        for name in changed:
+            shutil.copy2(UNIT_DIRECTORY / name, backup / name)
+        print(f"Previous changed units backed up to {backup}")
+    for name, content in units.items():
+        path = UNIT_DIRECTORY / name
+        if not path.exists() or path.read_text() != content:
+            atomic_unit(path, content)
+    subprocess.run(["systemctl", "daemon-reload"], check=True)
+    if enable:
+        subprocess.run(["systemctl", "enable", "--now", "quickshell-copr.timer"], check=True)
+        print("Timer enabled. Persistent catch-up may immediately start a missed run.")
+    else:
+        subprocess.run(["systemctl", "disable", "--now", "quickshell-copr.timer"], check=True)
+        print("Units installed; timer disabled and stopped (--no-enable).")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--project", type=Path, default=SOURCE, help="Persistent writable checkout (default: this checkout)")
+    parser.add_argument("--config", type=Path, default=Path("/etc/quickshell-copr/automation.toml"))
+    parser.add_argument("--user", default="quickshell-copr", help="Existing non-root service account")
+    parser.add_argument("--python", default=sys.executable, help="Service Python interpreter (3.12+ with python-copr)")
+    parser.add_argument("--calendar", default="*-*-* 06:23:00 UTC", help="systemd OnCalendar expression")
+    parser.add_argument("--dry-run", action="store_true", help="Verify/show units without root, credentials, or system changes")
+    parser.add_argument("--no-enable", action="store_true", help="Install units but leave the timer disabled and stopped")
+    options = parser.parse_args(argv)
+    try:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*\$?", options.user) or options.user == "root":
+            raise InstallError("Select a named non-root service account.")
+        if not options.calendar or any(ord(character) < 32 or ord(character) == 127 for character in options.calendar):
+            raise InstallError("The calendar must be a nonempty single-line expression.")
+        options.project = checked_path(options.project)
+        options.config = checked_path(options.config)
+        executable = shutil.which(str(options.python))
+        if not executable:
+            raise InstallError("The requested Python interpreter is not executable.")
+        options.python = checked_path(executable, resolve=False)
+        for name in ["config.toml", "qscopr/automate.py", "qscopr/__main__.py"]:
+            if not (options.project / name).is_file():
+                raise InstallError("The selected project is not a Quickshell COPR automation checkout.")
+        if not options.dry_run and os.geteuid() != 0:
+            raise InstallError("Run this installer with sudo, or use --dry-run to preview units.")
+        required = ["systemd-analyze"] if options.dry_run else ["systemd-analyze", "systemctl", "runuser"]
+        if any(not shutil.which(command) for command in required):
+            raise InstallError("Required systemd/util-linux commands are missing; install them from distribution repositories.")
+        units = render_units(options)
+        verify_units(units, options.calendar)
+        if options.dry_run:
+            for name, content in units.items():
+                print(f"--- {UNIT_DIRECTORY / name} ---\n{content}")
+            print("Dry run only: service-account prerequisites were not checked; no files or schedules changed.")
+            return 0
+        check_prerequisites(options)
+        install_units(units, enable=not options.no_enable)
+        print(f"Schedule: {options.calendar} (plus up to 10 minutes randomized delay)")
+        print("Inspect with: systemctl list-timers quickshell-copr.timer")
+        return 0
+    except InstallError as error:
+        print(f"Install refused: {error}", file=sys.stderr)
+    except subprocess.CalledProcessError:
+        print("Installation command failed; review the output above. The timer may be stopped.", file=sys.stderr)
+    except OSError as error:
+        print(f"Installation failed ({type(error).__name__}); review paths and permissions.", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -291,19 +291,60 @@ python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml
 
 ### systemd timer
 
-Example units are in `systemd/`. Review the service account, checkout path, Python
-path, and settings path before installation. The examples assume a provisioned
-`quickshell-copr` user/group and checkout at `/srv/quickshell-copr`.
+The executable `install` script renders the templates in `systemd/`, verifies
+them with `systemd-analyze`, and installs the pipeline, fallback alert, and timer
+units under `/etc/systemd/system/`. Provision the service account, dependencies,
+checkout permissions, settings, and credentials described above first: the
+installer does **not** create accounts, install packages, change ownership, or
+configure a container runtime.
 
-Install the reviewed units on the **server**, not the development machine:
+Preview the units without root or credentials; this does not install anything,
+check service-account prerequisites, or change schedules:
 
 ```bash
-sudo install -m 0644 systemd/quickshell-copr.service /etc/systemd/system/
-sudo install -m 0644 systemd/quickshell-copr-alert.service /etc/systemd/system/
-sudo install -m 0644 systemd/quickshell-copr.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now quickshell-copr.timer
+./install --dry-run
 ```
+
+Install on the **server**, from its persistent checkout:
+
+```bash
+sudo ./install
+```
+
+Defaults are the installer's checkout, existing user `quickshell-copr` (with its
+primary group), `/etc/quickshell-copr/automation.toml`, and the Python interpreter
+running the installer. Select a different interpreter explicitly if necessary;
+it must provide Python 3.12+ and the COPR client for the service account.
+
+Customize the paths, account, or systemd calendar:
+
+```bash
+sudo ./install \
+    --project /srv/quickshell-copr \
+    --config /etc/quickshell-copr/automation.toml \
+    --user quickshell-copr \
+    --python /usr/bin/python3 \
+    --calendar '*-*-* 06:23:00 UTC'
+```
+
+Before installing, prerequisite checks run as the selected non-root account.
+They validate configuration, credential-file metadata/readability without reading
+the secrets, SMTP CA trust, checkout write access, and container-tool availability.
+They do not contact COPR/SMTP, test container daemon access, build, or publish.
+Test email delivery and container access separately as described above.
+
+Installation reloads systemd and enables/starts **only the timer**. Because the
+timer is persistent, a missed run can start immediately after enabling it and can
+publish to COPR. Use `sudo ./install --no-enable` to install with the timer
+**disabled and stopped**, including on an existing installation.
+
+Rerun the installer to update units. It refuses to update while either service is
+running, stops an existing timer during updates, and backs up changed existing
+units to a private `quickshell-copr-backup-*` directory under
+`/etc/systemd/system/`. Unchanged files are left intact. Symlinked/special unit
+files are refused; resolve those manually. A failed installation returns nonzero
+and may leave the timer stopped; inspect the error and retained backups before
+retrying. There is no automatic rollback.
 
 The timer runs daily at **06:23 UTC**, with up to ten minutes of randomized delay,
 and catches up after downtime. The service has an eight-hour overall timeout;
@@ -436,6 +477,7 @@ Run the offline unit suite and syntax checks:
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q qscopr tests
+python3 -m py_compile install
 ```
 
 Run the real repository/container gate separately with a fresh output directory.
@@ -444,3 +486,6 @@ SMTP integration tests use a local capture-only TLS server and ephemeral
 certificates, never an external provider or real recipient. They use the
 `openssl` executable to generate test certificates and are skipped if it is not
 installed; the production SMTP sender itself needs only Python's standard library.
+Installer tests mock service-management commands and write only to temporary
+directories. Additional dry-run unit/calendar verification tests use
+`systemd-analyze` when available; they never activate a real timer.
