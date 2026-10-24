@@ -209,7 +209,10 @@ require a newly validated update rather than publishing stale approval.
 The separate protected publisher job installs `python3-copr` from Fedora's
 repositories and downloads only the fresh verified SRPMs/manifest from that same
 trusted workflow run. It uploads cpptrace first and waits for overall and Fedora 44
-chroot success before submitting Quickshell with an explicit COPR build dependency.
+chroot success before submitting Quickshell, recording the prerequisite build ID
+in Quickshell's result. It does not use COPR's batch dependency option: COPR cannot
+create a batch around an already finished build, and batch completion alone does
+not guarantee prerequisite success.
 Build networking is disabled for both. No PR-supplied artifact is consumed.
 COPR imports the submitted SRPM's spec; there is no direct edit of COPR's generated
 dist-git.

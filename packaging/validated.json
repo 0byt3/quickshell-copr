@@ -1,6 +1,6 @@
 {
-    "build_inputs_sha256": "1f4262592a8cc0602496a66a8f6d5d6a64957151e00973615d4be4ce29b0be65",
-    "checked_at": "2026-10-24T05:29:44.525061+00:00",
+    "build_inputs_sha256": "27cac72ad0ef96d279635b6d9393232b3858563af07d16058a0c6565f1bef24f",
+    "checked_at": "2026-10-24T14:18:23.059721+00:00",
     "cpptrace": {
         "release": {
             "commit": "3db8da80111171c219ab5839905771386bee06b3",
@@ -13,17 +13,17 @@
             "version": "1.0.4"
         },
         "rpm_sha256": {
-            "cpptrace-1.0.4-2.fc44.src.rpm": "0f458859f801e2bdf35d8317c1321054ebed75b60c57c2b25359a390cdd5237f",
-            "cpptrace-1.0.4-2.fc44.x86_64.rpm": "43546b1ec97d1652b440cbf1db96d6e2c0c383b6d39253c752bd083200f3bf78",
-            "cpptrace-debuginfo-1.0.4-2.fc44.x86_64.rpm": "69385c7b4cebd11a2f2e239874bc3d81a0d8fbb94efa62c2e0b546178dd669f4",
-            "cpptrace-debugsource-1.0.4-2.fc44.x86_64.rpm": "620f24c6e52e7c72df94ce1bb11438dc0aaf9dde12dc8cfdafae80323445cdc3",
-            "cpptrace-devel-1.0.4-2.fc44.x86_64.rpm": "6c76516e525fd4deea77b28043cbeb42c56e4fe15224806ba09144ceb567e58c"
+            "cpptrace-1.0.4-3.fc44.src.rpm": "2c1abb6ba6e13ab80131a438fc58b5007601721883e58d8f77683f72e1801184",
+            "cpptrace-1.0.4-3.fc44.x86_64.rpm": "27e7669cd7345b610506476b0e02702d88a51b4ae1afdb29ba3da4444f833267",
+            "cpptrace-debuginfo-1.0.4-3.fc44.x86_64.rpm": "f97cd0b0a4bbe261aa243843df8032dc4dc8f499bff6f9c7d69873e856f579fb",
+            "cpptrace-debugsource-1.0.4-3.fc44.x86_64.rpm": "bf0c16aaa05271cb5dae944ea8095752f695ca382bbbe8776687768ab9b53386",
+            "cpptrace-devel-1.0.4-3.fc44.x86_64.rpm": "f6d337e0b240bca303de93b4209d47a64804608d5250283fe07530a061f4bd78"
         },
         "runtime_rpms": [
-            "cpptrace-1.0.4-2.fc44.x86_64.rpm",
-            "cpptrace-devel-1.0.4-2.fc44.x86_64.rpm"
+            "cpptrace-1.0.4-3.fc44.x86_64.rpm",
+            "cpptrace-devel-1.0.4-3.fc44.x86_64.rpm"
         ],
-        "srpm": "cpptrace-1.0.4-2.fc44.src.rpm"
+        "srpm": "cpptrace-1.0.4-3.fc44.src.rpm"
     },
     "cpptrace_release": {
         "commit": "3db8da80111171c219ab5839905771386bee06b3",
@@ -35,11 +35,11 @@
         "url": "https://github.com/jeremy-rifkin/cpptrace/releases/tag/v1.0.4",
         "version": "1.0.4"
     },
-    "cpptrace_rpm_release": 2,
-    "cpptrace_spec_sha256": "b193518dce8489a55b17227b4c9d0c62dbe9d8a389a177249933fb67d2d17df4",
+    "cpptrace_rpm_release": 3,
+    "cpptrace_spec_sha256": "80abe15097c684c0bd9d2b389035361d9512fc59551f582657d9737ecafdc98d",
     "environment": {
         "architecture": "x86_64",
-        "dependency_fingerprint": "2b6997b7cd326a2c5e4d6956d3c65fd9ce95f8105588179c410cca79081b21b0",
+        "dependency_fingerprint": "1cce60915b411c62eb7b5f4ebee71d4821d6d7ecc771e55144df547c7904c4be",
         "fedora": 44,
         "packages": [
             "R-srpm-macros-0:1.3.7-2.fc44.noarch",
@@ -86,8 +86,8 @@
             "coreutils-common-0:9.10-5.fc44.x86_64",
             "cpio-0:2.15-9.fc44.x86_64",
             "cpp-0:16.2.1-2.fc44.x86_64",
-            "cpptrace-0:1.0.4-2.fc44.x86_64",
-            "cpptrace-devel-0:1.0.4-2.fc44.x86_64",
+            "cpptrace-0:1.0.4-3.fc44.x86_64",
+            "cpptrace-devel-0:1.0.4-3.fc44.x86_64",
             "cracklib-0:2.10.3-1.fc44.x86_64",
             "crypto-policies-0:20251128-3.git19878fe.fc44.noarch",
             "cups-devel-1:2.4.19-3.fc44.x86_64",
@@ -605,9 +605,9 @@
     },
     "image": {
         "digests": [
-            "registry.fedoraproject.org/fedora@sha256:6ad1739ac6fb30f72ecc7b62a7ca94871d1cab215e4f5174113941047e0b4ed4"
+            "registry.fedoraproject.org/fedora@sha256:ead52905ffe2985aed2881294b944bf225c74944f5afbbd4e2b8cb25dc2f649e"
         ],
-        "id": "sha256:6ad1739ac6fb30f72ecc7b62a7ca94871d1cab215e4f5174113941047e0b4ed4",
+        "id": "sha256:ead52905ffe2985aed2881294b944bf225c74944f5afbbd4e2b8cb25dc2f649e",
         "platform": "linux/amd64"
     },
     "inventory_sha256": "b94dd8a3dc3cb31d7431d4294ebf6a8dab1c6f9387f7f5acb549183e6939d491",
@@ -622,20 +622,20 @@
         "url": "https://github.com/quickshell-mirror/quickshell/releases/tag/v0.3.2",
         "version": "0.3.2"
     },
-    "rpm_release": 2,
+    "rpm_release": 3,
     "rpm_sha256": {
-        "cpptrace-1.0.4-2.fc44.src.rpm": "0f458859f801e2bdf35d8317c1321054ebed75b60c57c2b25359a390cdd5237f",
-        "cpptrace-1.0.4-2.fc44.x86_64.rpm": "43546b1ec97d1652b440cbf1db96d6e2c0c383b6d39253c752bd083200f3bf78",
-        "cpptrace-debuginfo-1.0.4-2.fc44.x86_64.rpm": "69385c7b4cebd11a2f2e239874bc3d81a0d8fbb94efa62c2e0b546178dd669f4",
-        "cpptrace-debugsource-1.0.4-2.fc44.x86_64.rpm": "620f24c6e52e7c72df94ce1bb11438dc0aaf9dde12dc8cfdafae80323445cdc3",
-        "cpptrace-devel-1.0.4-2.fc44.x86_64.rpm": "6c76516e525fd4deea77b28043cbeb42c56e4fe15224806ba09144ceb567e58c",
-        "quickshell-0.3.2-2.fc44.src.rpm": "4d3dd34ade6b96dbf7e82136d84e63397a45260497e0b5451195c26e04399c18",
-        "quickshell-0.3.2-2.fc44.x86_64.rpm": "e67547906cd367a684ce34976ce55d90c1f76cd5d63df886a4b8a4b9e5594594",
-        "quickshell-debuginfo-0.3.2-2.fc44.x86_64.rpm": "346eb2d20e30f89761dbd94e8f5841ec42669ed35b94a8c36ec3319dffd8b614",
-        "quickshell-debugsource-0.3.2-2.fc44.x86_64.rpm": "cc3f5838486741b563ba862e83f895ca9e0916ebedf36229f4002f5ba9bf0a35"
+        "cpptrace-1.0.4-3.fc44.src.rpm": "2c1abb6ba6e13ab80131a438fc58b5007601721883e58d8f77683f72e1801184",
+        "cpptrace-1.0.4-3.fc44.x86_64.rpm": "27e7669cd7345b610506476b0e02702d88a51b4ae1afdb29ba3da4444f833267",
+        "cpptrace-debuginfo-1.0.4-3.fc44.x86_64.rpm": "f97cd0b0a4bbe261aa243843df8032dc4dc8f499bff6f9c7d69873e856f579fb",
+        "cpptrace-debugsource-1.0.4-3.fc44.x86_64.rpm": "bf0c16aaa05271cb5dae944ea8095752f695ca382bbbe8776687768ab9b53386",
+        "cpptrace-devel-1.0.4-3.fc44.x86_64.rpm": "f6d337e0b240bca303de93b4209d47a64804608d5250283fe07530a061f4bd78",
+        "quickshell-0.3.2-3.fc44.src.rpm": "4ed52cc4dc15ac90386780df518c46d23b215a5fcb48d385bebfebc2699a67af",
+        "quickshell-0.3.2-3.fc44.x86_64.rpm": "59f74603b204af93bced8ec86602e26ffecf5d773d76fbba4d8ead016af36031",
+        "quickshell-debuginfo-0.3.2-3.fc44.x86_64.rpm": "6e877fcf121cb0b08152ed186a112ada1594ed0c7d17052bc2899961b574a54a",
+        "quickshell-debugsource-0.3.2-3.fc44.x86_64.rpm": "00bd6cd1cc5c5d90104e89bea3cdf695d71dfa7df748a3a8f3d672bb43cfed9d"
     },
-    "spec_sha256": "e1a41a49460348678e65153785a126bbb4c6b18f7b66510d55963aa3be6ce43d",
-    "srpm": "quickshell-0.3.2-2.fc44.src.rpm",
+    "spec_sha256": "16d029bdaa9ddf06b15d9c703415bce3985507a11f3aa6f2429ed4bb177dc3a1",
+    "srpm": "quickshell-0.3.2-3.fc44.src.rpm",
     "stage": "quickshell-build",
     "status": "validated"
 }

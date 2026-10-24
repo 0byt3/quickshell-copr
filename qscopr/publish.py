@@ -82,8 +82,6 @@ def publish(client, manifest, directory, deadline_seconds=7200):
             "chroots": [manifest["chroot"]],
             "enable_net": False,
         }
-        if "after_build_id" in manifest:
-            options["after_build_id"] = manifest["after_build_id"]
         created = client.build_proxy.create_from_file(
             owner, project, str(srpm),
             buildopts=options,
@@ -99,6 +97,8 @@ def publish(client, manifest, directory, deadline_seconds=7200):
         "state": "pending",
         "name": manifest.get("name", "quickshell"),
     }
+    if "prerequisite_build_id" in manifest:
+        result["prerequisite_build_id"] = manifest["prerequisite_build_id"]
     result_path = directory / (
         "cpptrace-copr-result.json" if result["name"] == "cpptrace" else "copr-result.json"
     )
@@ -138,7 +138,10 @@ def publish_pipeline(client, manifest, directory):
     validate_manifest(manifest, directory)
     validate_manifest(dependency, directory)
     completed = publish(client, dependency, directory)
-    return publish(client, manifest | {"after_build_id": completed["build_id"]}, directory)
+    # COPR cannot create a dependency batch around an already finished build.
+    # Waiting for overall/chroot success above is the stronger ordering gate:
+    # batch completion alone also permits failed prerequisites.
+    return publish(client, manifest | {"prerequisite_build_id": completed["build_id"]}, directory)
 
 
 def main():

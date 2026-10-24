@@ -131,7 +131,19 @@ class PublisherTests(unittest.TestCase):
         upload.side_effect = [{"build_id": 41}, {"build_id": 42}]
         publish_pipeline(self.client, manifest, self.output)
         self.assertEqual(upload.call_args_list[0].args[1]["name"], "cpptrace")
-        self.assertEqual(upload.call_args_list[1].args[1]["after_build_id"], 41)
+        self.assertEqual(upload.call_args_list[1].args[1]["prerequisite_build_id"], 41)
+
+    def test_completed_prerequisite_is_audited_without_invalid_batch_option(self):
+        result = publish(
+            self.client,
+            self.manifest | {"prerequisite_build_id": 41},
+            self.output,
+        )
+        options = self.client.build_proxy.create_from_file.call_args.kwargs["buildopts"]
+        self.assertNotIn("after_build_id", options)
+        self.assertEqual(result["prerequisite_build_id"], 41)
+        saved = json.loads((self.output / "copr-result.json").read_text())
+        self.assertEqual(saved["prerequisite_build_id"], 41)
 
     @patch("qscopr.publish.publish", side_effect=RuntimeError("cpptrace failed"))
     def test_cpptrace_failure_prevents_quickshell_upload(self, upload):

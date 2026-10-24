@@ -3,7 +3,7 @@
 %global commit 3db8da80111171c219ab5839905771386bee06b3
 Name: cpptrace
 Version: 1.0.4
-Release: 2%{?dist}
+Release: 3%{?dist}
 Summary: C++ stack traces with signal-safe libunwind support
 License: MIT
 URL: https://github.com/jeremy-rifkin/cpptrace
