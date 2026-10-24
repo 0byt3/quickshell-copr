@@ -289,6 +289,188 @@ full command manually once:
 python3 -m qscopr.automate --config /etc/quickshell-copr/automation.toml
 ```
 
+### Server deployment walkthrough
+
+Run the following commands **on the server**, using an administrator account with
+sudo. The package/account example is for a conventional **Fedora Server x86_64**
+installation using Docker/Moby; adapt package names and account tools for another
+distribution. The host need not be Fedora 44: the build container always uses the
+configured Fedora 44 image. The commit must have been pushed before cloning or
+pulling; development-machine commits are not automatically deployed.
+
+For an existing deployment, use [Updating an existing deployment](#updating-an-existing-deployment)
+instead of recreating accounts, cloning over the checkout, or overwriting settings.
+
+#### 1. Prepare a fresh server
+
+Install packages from Fedora's repositories, not pip or downloaded installers:
+
+```bash
+sudo dnf install git python3 python3-copr moby-engine docker-cli \
+    systemd util-linux shadow-utils ca-certificates openssl
+sudo useradd --system --user-group --create-home \
+    --home-dir /var/lib/quickshell-copr \
+    --shell /usr/sbin/nologin quickshell-copr
+sudo systemctl enable --now docker.service
+sudo usermod --append --groups docker quickshell-copr
+```
+
+Docker group membership grants effectively root-level host access; this must be
+a trusted service account. New service processes pick up its group membership
+without an interactive login. See Fedora's
+[Docker package documentation](https://docs.fedoraproject.org/en-US/quick-docs/installing-docker/)
+for distribution-specific details. Do not mix Fedora's Moby packages with a
+different Docker package source or the `podman-docker` compatibility wrapper.
+If choosing rootless Podman instead, skip the Docker-specific commands, configure
+the account's runtime/user manager and system-service environment for that
+distribution, and verify container execution in that environment before enabling
+the timer. The installer does not provision a rootless runtime.
+
+Clone the repository into a new service-owned directory:
+
+```bash
+sudo install -d -o quickshell-copr -g quickshell-copr -m 0750 /srv/quickshell-copr
+sudo -u quickshell-copr git clone --branch main \
+    https://github.com/0byt3/quickshell-copr.git /srv/quickshell-copr
+sudo -u quickshell-copr mkdir -p /srv/quickshell-copr/artifacts
+cd /srv/quickshell-copr
+```
+
+The HTTPS URL avoids requiring the development machine's SSH host alias or
+private key on the server. If repository access requires authentication, use an
+approved credential manager or deployment credential, never a token in the URL.
+Cloning as the service account gives it write access to the checkout and
+`packaging/`; do not clone as root and then run the service against root-owned
+files.
+
+Verify Python, the COPR client, and actual container access as the service account:
+
+```bash
+sudo -u quickshell-copr /usr/bin/python3 -c \
+    'import sys, copr.v3; assert sys.version_info >= (3, 12), "Python 3.12+ required"'
+sudo -u quickshell-copr env -i \
+    HOME=/var/lib/quickshell-copr PATH=/usr/bin:/bin /usr/bin/docker info
+sudo -u quickshell-copr env -i \
+    HOME=/var/lib/quickshell-copr PATH=/usr/bin:/bin /usr/bin/docker run \
+    --rm --platform=linux/amd64 --network=none --cap-drop=ALL \
+    --security-opt=no-new-privileges --user=1000:1000 \
+    registry.fedoraproject.org/fedora:44 /usr/bin/uname -m
+```
+
+The last command downloads the official image if necessary and should print
+`x86_64`; it does not build or publish packages. Fix daemon, permissions, network,
+or architecture/emulation failures before proceeding. These checks deliberately
+do not rely on an interactive shell's Docker context or runtime variables.
+
+#### 2. Configure a fresh installation
+
+Review `config.toml` and the COPR project as described under
+[Server prerequisites and configuration](#server-prerequisites-and-configuration).
+Enable `fedora-44-x86_64` and COPR's **Auto Create Repo** option so successful
+builds produce public repository metadata; the publisher does not configure or
+independently verify public repository availability.
+
+The following setup commands are **first-installation only**: `install` replaces
+existing destination files, so do not rerun them against populated settings or
+credentials.
+
+```bash
+sudo install -d -o root -g quickshell-copr -m 0750 /etc/quickshell-copr
+sudo install -o root -g quickshell-copr -m 0640 \
+    automation.example.toml /etc/quickshell-copr/automation.toml
+sudoedit /etc/quickshell-copr/automation.toml
+sudo install -o root -g root -m 0600 /dev/null /etc/quickshell-copr/copr-login
+sudo install -o root -g root -m 0600 /dev/null /etc/quickshell-copr/copr-token
+sudoedit /etc/quickshell-copr/copr-login /etc/quickshell-copr/copr-token
+sudo chown quickshell-copr:quickshell-copr \
+    /etc/quickshell-copr/copr-login /etc/quickshell-copr/copr-token
+sudo chmod 0400 /etc/quickshell-copr/copr-login /etc/quickshell-copr/copr-token
+```
+
+Populate each credential file through the editor with just its corresponding
+COPR API value, on one nonempty line. Never pass secret values as command
+arguments or place them in the checkout. Replace the example email addresses and
+SMTP hostname in the settings.
+
+For the example's authenticated SMTP configuration, also create its password file:
+
+```bash
+sudo install -o root -g root -m 0600 /dev/null /etc/quickshell-copr/smtp-password
+sudoedit /etc/quickshell-copr/smtp-password
+sudo chown quickshell-copr:quickshell-copr /etc/quickshell-copr/smtp-password
+sudo chmod 0400 /etc/quickshell-copr/smtp-password
+```
+
+For a relay without authentication, omit that file and remove **both**
+`smtp.username` and `smtp.password_file` from the settings instead. TLS remains
+mandatory. If using different credential paths or an account name, adjust all
+commands and settings consistently. Keep credentials readable only by their owner
+and ensure the account can traverse their parent directories.
+
+#### 3. Preview and install with scheduling disabled
+
+From `/srv/quickshell-copr`, verify the generated units and install them without
+starting the schedule:
+
+```bash
+./install --dry-run --python /usr/bin/python3
+sudo ./install --python /usr/bin/python3 --no-enable
+```
+
+The explicit interpreter avoids accidentally using a different administrator
+interpreter. The dry run verifies unit/calendar syntax but skips account and
+configuration checks. The actual installation performs service-account
+prerequisite checks; neither command builds, emails, or publishes. The timer
+remains **disabled and stopped**, including when updating an existing installation.
+See [systemd timer](#systemd-timer) below for custom paths, account, and schedule.
+
+#### 4. Verify alerts and the full service
+
+From the checkout, send an explicit test email as the service account:
+
+```bash
+sudo -u quickshell-copr /usr/bin/python3 -m qscopr.automate \
+    --config /etc/quickshell-copr/automation.toml --test-email
+```
+
+Confirm it arrives before proceeding. Exit `0` confirms SMTP server acceptance,
+not final inbox delivery. This is the first walkthrough step that sends email.
+
+Start a complete validation/publication run through the installed service:
+
+```bash
+sudo systemctl start --no-block quickshell-copr.service
+sudo journalctl --follow -u quickshell-copr.service -u quickshell-copr-alert.service
+```
+
+**This run can publish to COPR.** Following the journal does not wait for success
+automatically; Ctrl+C stops viewing logs, not the service. Once the run finishes:
+
+```bash
+systemctl show --property=ActiveState --property=Result --property=ExecMainStatus \
+    quickshell-copr.service
+```
+
+Expect `ActiveState=inactive`, `Result=success`, and `ExecMainStatus=0`; review the
+journal and `artifacts/automation/latest.json` for the completed pipeline outcome.
+`activating` is normal throughout a running `Type=oneshot` build, not proof of
+successful completion. Resolve failures and retry before enabling the timer.
+
+#### 5. Enable scheduling
+
+Only after the manual service run succeeds:
+
+```bash
+sudo systemctl enable --now quickshell-copr.timer
+systemctl is-enabled quickshell-copr.timer
+systemctl list-timers --all quickshell-copr.timer
+```
+
+The default is **06:23 UTC daily**, with up to ten minutes randomized delay.
+**Persistent catch-up can start a missed run immediately upon enabling.**
+Use only one scheduling mechanism: remove any cron entry for this checkout before
+enabling the timer.
+
 ### systemd timer
 
 The executable `install` script renders the templates in `systemd/`, verifies
@@ -305,7 +487,9 @@ check service-account prerequisites, or change schedules:
 ./install --dry-run
 ```
 
-Install on the **server**, from its persistent checkout:
+After provisioning and verification, the shorthand below installs and enables
+the timer on the **server** in one step. Prefer the walkthrough's `--no-enable`
+sequence for a first deployment:
 
 ```bash
 sudo ./install
@@ -374,6 +558,51 @@ and mail provider independently if delivery guarantees are important. There is n
 local mail queue: failed SMTP submission returns nonzero and leaves the failure
 unacknowledged, allowing the systemd fallback to try again. Repeated provider
 outages still need independent monitoring.
+
+### Updating an existing deployment
+
+Disable the timer first so it cannot start during deployment or a reboot:
+
+```bash
+sudo systemctl disable --now quickshell-copr.timer
+systemctl show --property=Id --property=ActiveState \
+    quickshell-copr.service quickshell-copr-alert.service
+```
+
+Wait until both services are `inactive` or `failed`. In particular, do not update
+the checkout while a service is `activating`, even if `systemctl is-active` does
+not report it as active. Also stop any cron or manual source of pipeline runs.
+The installer guards unit replacement, not an earlier `git pull`.
+
+Back up the checkout's `packaging/`, `config.toml`, and `artifacts/automation/`
+(including `published.json`, `latest.json`, and `.lock`) while idle, along with a
+separate, access-protected backup of `/etc/quickshell-copr/`. A server migration
+must preserve this state and leave only one publishing server scheduled.
+
+Inspect local changes before pulling:
+
+```bash
+cd /srv/quickshell-copr
+sudo -u quickshell-copr git --no-pager status --short
+sudo -u quickshell-copr git pull --ff-only origin main && \
+    sudo ./install --python /usr/bin/python3 --no-enable
+```
+
+Promotion legitimately changes maintained files. If Git reports a conflict or
+refuses the pull, stop and reconcile the backed-up local state with the new code;
+do not use `git reset --hard`, `git clean`, or blindly replace packaging/receipts.
+The same applies to locally edited `config.toml`. Do not proceed to installation
+after a failed pull. Rerun the email and full-service checks in the walkthrough,
+then re-enable the timer only after they pass.
+
+To pause future scheduling, use
+`sudo systemctl disable --now quickshell-copr.timer`. This does **not** stop an
+already running pipeline. To remove scheduling entirely, first disable the
+timer and wait for both services to finish, then remove only the three installed
+unit files (`quickshell-copr.service`, `quickshell-copr-alert.service`, and
+`quickshell-copr.timer`) from `/etc/systemd/system/` and run
+`sudo systemctl daemon-reload`. Preserve configuration, credentials, artifacts,
+and backups unless deliberately retiring them.
 
 ### cron alternative
 
