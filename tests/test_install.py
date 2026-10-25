@@ -365,6 +365,11 @@ class InstallerPreflightTests(unittest.TestCase):
         self.probe()
         self.assertEqual(self.errors.getvalue(), "")
 
+    def test_missing_smtp_password_file_does_not_block_preflight(self):
+        self.paths[-1].unlink()
+        self.probe()
+        self.assertEqual(self.errors.getvalue(), "")
+
     def test_empty_missing_public_or_directory_credentials_are_rejected(self):
         for problem in ["empty", "missing", "public", "directory"]:
             with self.subTest(problem=problem):

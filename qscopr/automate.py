@@ -11,6 +11,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import tomllib
 import uuid
 from datetime import datetime, timezone
@@ -38,20 +39,30 @@ def clean_environment():
     }
 
 
+def validate_address(address):
+    if not isinstance(address, str) or "\n" in address or "\r" in address:
+        raise ValueError("Invalid alert address")
+    parsed = Address(addr_spec=address)
+    if not parsed.username or not parsed.domain:
+        raise ValueError("Alert addresses must include a domain")
+
+
 def load_settings(path):
     settings = tomllib.loads(path.read_text())
-    recipients = settings["alert_to"]
-    if not isinstance(recipients, list) or not recipients:
-        raise ValueError("alert_to must be a nonempty list")
-    for address in [settings["alert_from"], *recipients]:
-        if not isinstance(address, str) or "\n" in address or "\r" in address:
-            raise ValueError("Invalid alert address")
-        parsed = Address(addr_spec=address)
-        if not parsed.username or not parsed.domain:
-            raise ValueError("Alert addresses must include a domain")
+    if "alert_from" in settings and settings["alert_from"] is not None:
+        validate_address(settings["alert_from"])
+    if "alert_to" in settings and settings["alert_to"] is not None:
+        recipients = settings["alert_to"]
+        if not isinstance(recipients, list) or not recipients:
+            raise ValueError("alert_to must be a nonempty list")
+        for address in recipients:
+            validate_address(address)
     if "sendmail" in settings:
         raise ValueError("Replace the sendmail setting with an smtp table")
-    settings["smtp"] = smtp_settings(settings.get("smtp"))
+    if settings.get("smtp"):
+        settings["smtp"] = smtp_settings(settings["smtp"])
+    else:
+        settings["smtp"] = {}
     settings.setdefault("stage_timeout_seconds", 18000)
     for key in ["copr_login_file", "copr_token_file"]:
         if not isinstance(settings[key], str) or not Path(settings[key]).is_absolute():
@@ -131,7 +142,23 @@ def atomic_json(path, value):
         temporary.unlink(missing_ok=True)
 
 
+def email_configured(settings):
+    if not settings.get("alert_from") or not settings.get("alert_to"):
+        return False
+    smtp = settings.get("smtp")
+    if not isinstance(smtp, dict) or not smtp.get("host"):
+        return False
+    smtp = smtp_settings(smtp)
+    if "password_file" in smtp and not Path(smtp["password_file"]).is_file():
+        return False
+    if "ca_file" in smtp and not Path(smtp["ca_file"]).is_file():
+        return False
+    return True
+
+
 def send_email(settings, subject, body):
+    if not settings.get("alert_from") or not settings.get("alert_to"):
+        raise ValueError("alert_from and alert_to are required to send email")
     smtp = smtp_settings(settings.get("smtp"))
     # Never put passwords in a subprocess environment, command line, debug log,
     # notification body, or the sanitized exception reports used by the CLI.
@@ -168,6 +195,13 @@ def send_email(settings, subject, body):
 
 
 def failure_email(settings, record):
+    if not email_configured(settings):
+        print(
+            "Alert email skipped: SMTP alert settings or credentials are not configured.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return False
     stage = record.get("stage", "service")
     send_email(
         settings,
@@ -181,6 +215,7 @@ def failure_email(settings, record):
         "The pipeline stopped. Inspect pipeline.log, gate.json, and COPR result "
         "files where present. No later stage was started after the failure.\n",
     )
+    return True
 
 
 def validation_identity(project):
@@ -207,15 +242,41 @@ def execute_stage(project, output, settings, stage, arguments, update, publishin
     with (output / "pipeline.log").open("a") as log:
         log.write(f"\n=== {stage} ===\n")
         log.flush()
-        subprocess.run(
-            [sys.executable, *arguments],
-            cwd=project,
-            env=environment,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            timeout=settings["stage_timeout_seconds"],
-            check=True,
-        )
+        read_fd, write_fd = os.pipe()
+
+        def forward():
+            with os.fdopen(read_fd, "r", errors="replace") as stream:
+                for line in stream:
+                    log.write(line)
+                    log.flush()
+                    print(line, end="", flush=True)
+
+        reader = threading.Thread(target=forward, daemon=True)
+        reader.start()
+        try:
+            subprocess.run(
+                [sys.executable, *arguments],
+                cwd=project,
+                env=environment,
+                stdout=write_fd,
+                stderr=subprocess.STDOUT,
+                timeout=settings["stage_timeout_seconds"],
+                check=True,
+            )
+        finally:
+            os.close(write_fd)
+            reader.join(timeout=5)
+
+
+def log_gate_report(report):
+    release = report.get("release") or {}
+    tag = release.get("tag", "unknown")
+    commit = release.get("commit", "unknown")
+    message = report.get("message", "")
+    summary = f"Gate status: {report.get('status', 'unknown')} (release: {tag}, commit: {commit})"
+    if message:
+        summary += f" - {message}"
+    print(summary, flush=True)
 
 
 def pipeline(project, root, output, settings, update, tag=None, force=False):
@@ -223,9 +284,10 @@ def pipeline(project, root, output, settings, update, tag=None, force=False):
         execute_stage(project, output, settings, name, arguments, update, publishing)
 
     update(stage="preflight")
-    smtp = smtp_settings(settings.get("smtp"))
-    if "password_file" in smtp:
-        credential(smtp["password_file"])
+    if email_configured(settings):
+        smtp = smtp_settings(settings["smtp"])
+        if "password_file" in smtp:
+            credential(smtp["password_file"])
     # Check credential availability before an expensive build; values stay private.
     credential(settings["copr_login_file"])
     credential(settings["copr_token_file"])
@@ -240,10 +302,12 @@ def pipeline(project, root, output, settings, update, tag=None, force=False):
         arguments.append("--force")
     stage("check", arguments)
     report = json.loads((checked / "gate.json").read_text())
+    log_gate_report(report)
     if report["status"] == "unchanged":
         identity = validation_identity(project)
         receipt = root / "published.json"
         if receipt.exists() and json.loads(receipt.read_text())["validation"] == identity:
+            print("Release already validated and published to COPR; skipping.", flush=True)
             return "unchanged"
         # Promotion is not proof of publication. Rebuild the maintained release
         # when there is no matching success receipt, even after an interruption.
@@ -252,6 +316,7 @@ def pipeline(project, root, output, settings, update, tag=None, force=False):
             "-m", "qscopr", "check", "--verify-tracked", "--output", str(checked),
         ])
         report = json.loads((checked / "gate.json").read_text())
+        log_gate_report(report)
     elif report["status"] == "validated":
         stage("promote", ["-m", "qscopr", "promote", "--output", str(checked)])
     if report["status"] != "validated":
@@ -262,6 +327,12 @@ def pipeline(project, root, output, settings, update, tag=None, force=False):
     results = {}
     for filename in ["cpptrace-copr-result.json", "copr-result.json"]:
         result = json.loads((checked / filename).read_text())
+        print(
+            f"COPR result ({result.get('name', filename)}): build_id={result.get('build_id')} "
+            f"state={result.get('state')} chroot_state={result.get('chroot_state')} "
+            f"url={result.get('url', 'n/a')}",
+            flush=True,
+        )
         if result["state"] != "succeeded" or result["chroot_state"] != "succeeded":
             raise ValueError("Both COPR builds must succeed before recording publication")
         results[filename] = result
@@ -315,9 +386,14 @@ def run(project, settings, tag=None, force=False):
                     update()
                 except OSError:
                     print("Could not persist failure metadata; attempting email anyway.", file=sys.stderr)
-                failure_email(settings, record)
-                update(alert_sent=True)
-                print(f"Pipeline failed at {record['stage']}; artifacts: {output}", file=sys.stderr)
+                if failure_email(settings, record):
+                    update(alert_sent=True)
+                print(
+                    f"Pipeline failed at {record['stage']} ({record['error_type']}, exit_code={record['exit_code']}); "
+                    f"artifacts: {output}",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 return 1
     except Exception as error:
         # This also covers log/state-directory errors and failed SMTP submission.

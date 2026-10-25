@@ -304,14 +304,59 @@ class AutomationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "private"):
                     credential(path)
 
-    def test_smtp_password_is_checked_before_building(self):
+    def test_missing_smtp_password_or_settings_do_not_block_automation(self):
         self.settings["smtp"].update({
             "username": "smtp-user",
             "password_file": str(self.project / "missing-smtp-password"),
         })
+        self.assertEqual(run(self.project, self.settings), 0)
+        self.assertEqual(self.latest()["status"], "published")
+        self.assertEqual(self.mails, [])
+
+        for key in ["alert_from", "alert_to", "smtp"]:
+            with self.subTest(missing=key):
+                reduced = self.settings.copy()
+                reduced.pop(key, None)
+                self.commands.clear()
+                self.assertEqual(run(self.project, reduced), 0)
+                self.assertEqual(self.latest()["status"], "published")
+
+    def test_failed_stage_without_email_config_skips_alert_cleanly(self):
+        self.failure = "check"
+        self.settings.pop("smtp", None)
+        self.assertEqual(run(self.project, self.settings), 1)
+        self.assertEqual(self.latest()["stage"], "check")
+        self.assertFalse(self.latest()["alert_sent"])
+        self.assertEqual(self.mails, [])
+
+    def test_existing_invalid_smtp_password_is_checked_before_building(self):
+        password = self.project / "insecure-smtp-password"
+        password.write_text("secret\n")
+        password.chmod(0o644)
+        self.settings["smtp"].update({
+            "username": "smtp-user",
+            "password_file": str(password),
+        })
         self.assertEqual(run(self.project, self.settings), 1)
         self.assertEqual(self.latest()["stage"], "preflight")
         self.assertEqual(self.commands, [])
+
+    def test_stage_output_streams_to_stdout_and_pipeline_log(self):
+        def execute_with_output(command, **kwargs):
+            os.write(kwargs["stdout"], b"detailed stage log line\n")
+            return self.execute(command, **kwargs)
+
+        self.mock_run.side_effect = execute_with_output
+        with patch("sys.stdout") as stdout:
+            self.assertEqual(run(self.project, self.settings), 0)
+        printed = "".join(
+            call.args[0] for call in stdout.write.call_args_list if call.args
+        )
+        self.assertIn("detailed stage log line\n", printed)
+        self.assertIn("Gate status: validated", printed)
+        self.assertIn("COPR result", printed)
+        log_path = Path(self.latest()["output"]) / "pipeline.log"
+        self.assertIn("detailed stage log line\n", log_path.read_text())
 
     def test_empty_or_multiline_credentials_are_refused(self):
         path = Path(self.settings["copr_token_file"])

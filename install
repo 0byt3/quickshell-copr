@@ -43,8 +43,9 @@ try:
     load_config(Path.cwd())
     stage = "private credential-file permissions and readability"
     paths = [settings["copr_login_file"], settings["copr_token_file"]]
-    if "password_file" in settings["smtp"]:
-        paths.append(settings["smtp"]["password_file"])
+    smtp = settings.get("smtp") or {}
+    if "password_file" in smtp and Path(smtp["password_file"]).exists():
+        paths.append(smtp["password_file"])
     for value in paths:
         path = Path(value)
         metadata = path.stat()
@@ -56,7 +57,9 @@ try:
         ):
             raise ValueError("Private readable nonempty credential files are required")
     stage = "SMTP certificate trust"
-    ssl.create_default_context(cafile=settings["smtp"].get("ca_file"))
+    ca_file = smtp.get("ca_file")
+    if not ca_file or Path(ca_file).exists():
+        ssl.create_default_context(cafile=ca_file)
     stage = "checkout and build-directory write access"
     for path in [Path.cwd(), Path("qscopr"), Path("tests"), Path("packaging")]:
         if not path.is_dir() or not os.access(path, os.R_OK | os.W_OK | os.X_OK):
